@@ -11,6 +11,7 @@ python = "^3.13"
 fastapi = "^0.129.0"
 uvicorn = {extras = ["standard"], version = "^0.40.0"}
 pypdf = "^6.7.0"
+python-multipart = "^0.0.22"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.1"
