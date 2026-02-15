@@ -20,6 +20,7 @@ node_modules/
 # IDEs
 .vscode/
 .idea/
+.claude/
 
 # OS
 .DS_Store
