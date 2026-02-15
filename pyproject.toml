@@ -16,9 +16,9 @@ python-multipart = "^0.0.22"
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.1"
 black = "^26.1.0"
-mypy = "^1.19.1"
 bandit = "^1.9.3"
 pre-commit = "^4.5.1"
+ty = "^0.0.17"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -32,12 +32,6 @@ select = ["E", "F", "N", "W"]
 
 [tool.black]
 target-version = ["py313"]
-
-[tool.mypy]
-python_version = "3.13"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
 
 [tool.bandit]
 exclude_dirs = ["tests"]

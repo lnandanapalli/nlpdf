@@ -22,7 +22,9 @@ async def rotate_endpoint(
     file: UploadFile,
     rotation: int = Form(..., description="Rotation angle (90, 180, 270)"),
     page_indices: str | None = Form(
-        None, description="JSON list of page indices, e.g. [0, 2, 4]. Omit for all."
+        None,
+        description="JSON list of page indices (1-indexed). "
+        "Example: [1, 3, 5] = pages 1, 3, 5. Omit for all pages.",
     ),
 ) -> FileResponse:
     """Rotate pages in an uploaded PDF file."""
