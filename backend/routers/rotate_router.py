@@ -20,20 +20,19 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 @router.post("")
 async def rotate_endpoint(
     file: UploadFile,
-    rotation: int = Form(..., description="Rotation angle (90, 180, 270)"),
-    page_indices: str | None = Form(
-        None,
-        description="JSON list of page indices (1-indexed). "
-        "Example: [1, 3, 5] = pages 1, 3, 5. Omit for all pages.",
+    rotations: str = Form(
+        ...,
+        description="JSON list of [page_num, angle] tuples (1-indexed, clockwise). "
+        "Example: [[1, 90], [3, 180], [5, 270]] - angles: 90, 180, or 270",
     ),
 ) -> FileResponse:
-    """Rotate pages in an uploaded PDF file."""
+    """Rotate pages in an uploaded PDF file with individual rotation settings."""
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
     try:
-        parsed_indices = json.loads(page_indices) if page_indices else None
-        params = RotateParams(rotation=rotation, page_indices=parsed_indices)
+        parsed_rotations = json.loads(rotations)
+        params = RotateParams(rotations=parsed_rotations)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
     except ValidationError as e:
@@ -47,7 +46,7 @@ async def rotate_endpoint(
         content = await file.read()
         input_path.write_bytes(content)
 
-        rotate_pdf(input_path, params.rotation, params.page_indices, output_path)
+        rotate_pdf(input_path, params.rotations, output_path)
 
         return FileResponse(
             path=output_path,

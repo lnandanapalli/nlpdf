@@ -7,18 +7,18 @@ from pypdf import PdfReader, PdfWriter
 
 def rotate_pdf(
     input_path: Path,
-    rotation: int,
-    page_indices: list[int] | None,
+    rotation_specs: list[tuple[int, int]],
     output_path: Path,
 ) -> Path:
     """
-    Rotate specific pages in a PDF.
+    Rotate specific pages in a PDF with individual rotation settings.
 
     Args:
         input_path: Path to input PDF file
-        rotation: Degrees to rotate (90, 180, 270, or negative)
-        page_indices: Page indices to rotate (1-indexed), None for all pages
-                      Example: [1, 3, 5] means pages 1, 3, and 5
+        rotation_specs: List of (page_num, angle) tuples (1-indexed, clockwise only)
+                        Example: [(1, 90), (3, 180), (5, 270)]
+                        - page_num: 1-indexed page number
+                        - angle: rotation angle (90, 180, or 270 clockwise)
         output_path: Path to save rotated PDF
 
     Returns:
@@ -28,24 +28,24 @@ def rotate_pdf(
     writer = PdfWriter()
     total_pages = len(reader.pages)
 
-    # Validate page indices against actual PDF page count (1-indexed)
-    if page_indices is not None:
-        for idx in page_indices:
-            if idx > total_pages:
-                raise ValueError(
-                    f"Page index {idx} exceeds PDF page count ({total_pages})"
-                )
+    # Validate page numbers against actual PDF page count (1-indexed)
+    for page_num, _ in rotation_specs:
+        if page_num > total_pages:
+            raise ValueError(
+                f"Page number {page_num} exceeds PDF page count ({total_pages})"
+            )
 
-    # Convert 1-indexed to 0-indexed for pypdf
-    pages_to_rotate = (
-        set(idx - 1 for idx in page_indices)
-        if page_indices is not None
-        else set(range(total_pages))
-    )
+    # Create a dict of page rotations (convert to 0-indexed)
+    rotations = {}
+    for page_num, angle in rotation_specs:
+        # Convert 1-indexed to 0-indexed
+        page_idx = page_num - 1
+        rotations[page_idx] = angle
 
+    # Process all pages
     for page_index, page in enumerate(reader.pages):
-        if page_index in pages_to_rotate:
-            page = page.rotate(rotation)
+        if page_index in rotations:
+            page = page.rotate(rotations[page_index])
         writer.add_page(page)
 
     with open(output_path, "wb") as output_file:

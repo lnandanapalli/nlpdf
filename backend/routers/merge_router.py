@@ -28,7 +28,12 @@ async def merge_endpoint(files: list[UploadFile]) -> FileResponse:
 
     merge_id = uuid.uuid4().hex
     input_paths: list[Path] = []
-    output_path = UPLOAD_DIR / f"{merge_id}_merged.pdf"
+
+    # Get first PDF's name without extension for the merged filename
+    first_filename = files[0].filename or "document"
+    first_name = Path(first_filename).stem
+    output_filename = f"{first_name}_merged.pdf"
+    output_path = UPLOAD_DIR / f"{merge_id}_{output_filename}"
 
     try:
         for i, f in enumerate(files):
@@ -42,7 +47,7 @@ async def merge_endpoint(files: list[UploadFile]) -> FileResponse:
         return FileResponse(
             path=output_path,
             media_type="application/pdf",
-            filename="merged.pdf",
+            filename=output_filename,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Merge failed: {e}")

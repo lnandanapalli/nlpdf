@@ -1,4 +1,4 @@
-"""Validators for PDF-related operations."""
+"""Validators for page-related operations."""
 
 
 def validate_page_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -61,30 +61,6 @@ def validate_page_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]
             )
 
     return ranges
-
-
-def validate_rotation_angle(rotation: int) -> int:
-    """
-    Validate rotation angle.
-
-    Args:
-        rotation: Rotation angle in degrees
-
-    Returns:
-        Validated rotation angle
-
-    Raises:
-        ValueError: If rotation is not a valid multiple of 90
-    """
-    valid_rotations = {90, 180, 270, -90, -180, -270, 0, 360, -360}
-
-    if rotation not in valid_rotations:
-        raise ValueError(
-            f"Invalid rotation angle {rotation}. "
-            f"Must be a multiple of 90 degrees (90, 180, 270, -90, -180, -270)"
-        )
-
-    return rotation
 
 
 def validate_page_indices(
