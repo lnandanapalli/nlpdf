@@ -17,9 +17,13 @@ def merge_pdfs(input_paths: list[Path], output_path: Path) -> Path:
         Path to the merged PDF file
     """
     writer = PdfWriter()
+    total_pages = 0
 
     for pdf_path in input_paths:
         reader = PdfReader(pdf_path)
+        total_pages += len(reader.pages)
+        if total_pages > 5000:
+            raise ValueError("Combined PDFs exceed maximum page count (5000)")
         for page in reader.pages:
             writer.add_page(page)
 

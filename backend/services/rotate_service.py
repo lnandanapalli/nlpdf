@@ -28,6 +28,9 @@ def rotate_pdf(
     writer = PdfWriter()
     total_pages = len(reader.pages)
 
+    if total_pages > 5000:
+        raise ValueError("PDF exceeds maximum page count (5000)")
+
     # Validate page numbers against actual PDF page count (1-indexed)
     for page_num, _ in rotation_specs:
         if page_num > total_pages:

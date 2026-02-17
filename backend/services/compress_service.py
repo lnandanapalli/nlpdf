@@ -1,11 +1,14 @@
 """PDF compression service using pikepdf and Pillow."""
 
 import io
+import logging
 from pathlib import Path
 
 import pikepdf
 from pikepdf import Stream
 from PIL import Image
+
+logger = logging.getLogger("nlpdf.compress")
 
 # Level -> scale factor (how much of original to keep)
 SCALE_FACTORS = {1: 0.6, 2: 0.4, 3: 0.2}
@@ -27,6 +30,9 @@ def compress_pdf(input_path: Path, output_path: Path, level: int) -> Path:
     scale = SCALE_FACTORS[level]
 
     with pikepdf.open(input_path) as pdf:
+        if len(pdf.pages) > 5000:
+            raise ValueError("PDF exceeds maximum page count (5000)")
+
         for page in pdf.pages:
             _compress_page_images(page, scale)
 
@@ -57,7 +63,12 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
                 _compress_to_jpeg(raw_stream, pdf_image, scale)
 
         except Exception as e:
-            print(f"[compress] Failed '{name}': " f"{type(e).__name__}: {e}")
+            logger.debug(
+                "Failed to compress image '%s': %s: %s",
+                name,
+                type(e).__name__,
+                e,
+            )
             continue
 
 
@@ -78,7 +89,7 @@ def _recompress_jpeg(raw_stream, pdf_image, scale: float) -> None:
     if len(jpeg_data) >= original_size:
         return
 
-    print(f"[compress] JPEG: {original_size} -> {len(jpeg_data)}")
+    logger.debug("JPEG recompressed: %d -> %d bytes", original_size, len(jpeg_data))
     raw_stream.write(jpeg_data, filter=pikepdf.Name.DCTDecode)
     raw_stream.Width = new_w
     raw_stream.Height = new_h
@@ -107,7 +118,7 @@ def _compress_to_jpeg(raw_stream, pdf_image, scale: float) -> None:
     if len(jpeg_data) >= original_size:
         return
 
-    print(f"[compress] New JPEG: " f"{original_size} -> {len(jpeg_data)}")
+    logger.debug("Converted to JPEG: %d -> %d bytes", original_size, len(jpeg_data))
 
     for old_key in ["/DecodeParms", "/Decode", "/SMask", "/Mask"]:
         if old_key in raw_stream:

@@ -1,20 +1,21 @@
 """PDF splitting router."""
 
 import json
+import logging
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
+from starlette.background import BackgroundTask
 
 from backend.schemas import SplitParams
+from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
 from backend.services import split_pdf
 
-router = APIRouter(prefix="/pdf/split", tags=["pdf"])
+logger = logging.getLogger("nlpdf.split")
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+router = APIRouter(prefix="/pdf/split", tags=["pdf"])
 
 
 @router.post("")
@@ -32,9 +33,6 @@ async def split_endpoint(
     ),
 ) -> FileResponse:
     """Split a PDF by extracting specific page ranges."""
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="File must be a PDF")
-
     try:
         raw = json.loads(page_ranges)
         params = SplitParams(page_ranges=raw, merge=merge)
@@ -58,8 +56,7 @@ async def split_endpoint(
         filename = f"split_{base_name}.zip"
 
     try:
-        content = await file.read()
-        input_path.write_bytes(content)
+        await validate_and_save_pdf(file, input_path)
 
         # Extract original filename without extension
         original_name = (file.filename or "document").rsplit(".", 1)[0]
@@ -72,6 +69,12 @@ async def split_endpoint(
             path=output_path,
             media_type=media_type,
             filename=filename,
+            background=BackgroundTask(cleanup_files, input_path, output_path),
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Split failed: {e}")
+    except HTTPException:
+        cleanup_files(input_path, output_path)
+        raise
+    except Exception:
+        cleanup_files(input_path, output_path)
+        logger.exception("Split failed")
+        raise HTTPException(status_code=500, detail="Split failed")

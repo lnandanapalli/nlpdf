@@ -1,17 +1,23 @@
 """PDF merging router."""
 
+import logging
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
+from backend.security import (
+    MAX_MERGE_FILES,
+    UPLOAD_DIR,
+    cleanup_files,
+    validate_and_save_pdf,
+)
 from backend.services import merge_pdfs
 
-router = APIRouter(prefix="/pdf/merge", tags=["pdf"])
+logger = logging.getLogger("nlpdf.merge")
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+router = APIRouter(prefix="/pdf/merge", tags=["pdf"])
 
 
 @router.post("")
@@ -20,26 +26,24 @@ async def merge_endpoint(files: list[UploadFile]) -> FileResponse:
     if len(files) < 2:
         raise HTTPException(status_code=400, detail="At least 2 PDF files required")
 
-    for f in files:
-        if f.content_type != "application/pdf":
-            raise HTTPException(
-                status_code=400, detail=f"File '{f.filename}' is not a PDF"
-            )
+    if len(files) > MAX_MERGE_FILES:
+        raise HTTPException(
+            status_code=400, detail=f"Maximum {MAX_MERGE_FILES} files allowed per merge"
+        )
 
     merge_id = uuid.uuid4().hex
-    input_paths: list[Path] = []
+    input_paths = []
 
     # Get first PDF's name without extension for the merged filename
     first_filename = files[0].filename or "document"
-    first_name = Path(first_filename).stem
+    first_name = first_filename.rsplit(".", 1)[0]
     output_filename = f"{first_name}_merged.pdf"
     output_path = UPLOAD_DIR / f"{merge_id}_{output_filename}"
 
     try:
         for i, f in enumerate(files):
             input_path = UPLOAD_DIR / f"{merge_id}_{i}.pdf"
-            content = await f.read()
-            input_path.write_bytes(content)
+            await validate_and_save_pdf(f, input_path)
             input_paths.append(input_path)
 
         merge_pdfs(input_paths, output_path)
@@ -48,6 +52,12 @@ async def merge_endpoint(files: list[UploadFile]) -> FileResponse:
             path=output_path,
             media_type="application/pdf",
             filename=output_filename,
+            background=BackgroundTask(cleanup_files, *input_paths, output_path),
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Merge failed: {e}")
+    except HTTPException:
+        cleanup_files(*input_paths, output_path)
+        raise
+    except Exception:
+        cleanup_files(*input_paths, output_path)
+        logger.exception("Merge failed")
+        raise HTTPException(status_code=500, detail="Merge failed")

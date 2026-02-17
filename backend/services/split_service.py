@@ -31,6 +31,9 @@ def split_pdf(
     reader = PdfReader(input_path)
     total_pages = len(reader.pages)
 
+    if total_pages > 5000:
+        raise ValueError("PDF exceeds maximum page count (5000)")
+
     # Validate ranges against actual PDF page count (1-indexed)
     for start, end in page_ranges:
         if end > total_pages:
