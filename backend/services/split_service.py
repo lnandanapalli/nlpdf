@@ -74,8 +74,8 @@ def split_pdf(
 
         # Create ZIP file
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for pdf_file in pdf_files:
-                zipf.write(pdf_file, pdf_file.name)
-                pdf_file.unlink()  # Delete temporary PDF file
+            for path in pdf_files:
+                zipf.write(path, path.name)
+                path.unlink()  # Delete temporary PDF file
 
         return output_path

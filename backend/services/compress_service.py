@@ -80,10 +80,10 @@ def _recompress_jpeg(raw_stream, pdf_image, scale: float) -> None:
 
     new_w = max(1, int(pil_image.width * scale))
     new_h = max(1, int(pil_image.height * scale))
-    pil_image = pil_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    resized_image = pil_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
     buf = io.BytesIO()
-    pil_image.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    resized_image.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
     jpeg_data = buf.getvalue()
 
     if len(jpeg_data) >= original_size:
@@ -109,10 +109,10 @@ def _compress_to_jpeg(raw_stream, pdf_image, scale: float) -> None:
 
     new_w = max(1, int(pil_image.width * scale))
     new_h = max(1, int(pil_image.height * scale))
-    pil_image = pil_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    resized_image = pil_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
     buf = io.BytesIO()
-    pil_image.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    resized_image.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
     jpeg_data = buf.getvalue()
 
     if len(jpeg_data) >= original_size:

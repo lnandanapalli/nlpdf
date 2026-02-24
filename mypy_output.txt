@@ -1,0 +1,7 @@
+backend\services\compress_service.py:83: error: Incompatible types in assignment (expression has type "Image", variable has type "ImageFile")  [assignment]
+backend\services\split_service.py:77: error: Incompatible types in assignment (expression has type "Path", variable has type "BufferedWriter")  [assignment]
+backend\services\split_service.py:78: error: Argument 1 to "write" of "ZipFile" has incompatible type "BufferedWriter"; expected "str | PathLike[str]"  [arg-type]
+backend\services\split_service.py:79: error: "BufferedWriter" has no attribute "unlink"  [attr-defined]
+backend\schemas\llm_schema.py:78: error: Incompatible return value type (got "BaseModel", expected "CompressOperation | SplitOperation | RotateOperation | MergeOperation")  [return-value]
+backend\database.py:24: error: The return type of an async generator function should be "AsyncGenerator" or one of its supertypes  [misc]
+Found 6 errors in 4 files (checked 31 source files)
