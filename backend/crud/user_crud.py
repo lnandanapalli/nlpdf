@@ -1,5 +1,7 @@
 """CRUD operations for the User model."""
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,3 +21,24 @@ async def create_user(db: AsyncSession, email: str, hashed_password: str) -> Use
     await db.flush()
     await db.refresh(user)
     return user
+
+
+async def update_user_otp(
+    db: AsyncSession, user: User, otp_code: str, expires_at: datetime
+) -> None:
+    """Update the OTP code and expiration for a user."""
+    user.otp_code = otp_code
+    user.otp_expires_at = expires_at
+    await db.commit()
+    await db.refresh(user)
+
+
+async def mark_user_verified(db: AsyncSession, user: User) -> None:
+    """Mark a user as verified and clear the OTP fields."""
+    user.is_verified = (
+        True  # or 1 depending on dialect handling, but True works in SQLAlchemy
+    )
+    user.otp_code = None
+    user.otp_expires_at = None
+    await db.commit()
+    await db.refresh(user)

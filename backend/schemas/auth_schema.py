@@ -34,3 +34,22 @@ class UserResponse(BaseModel):
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class VerifyOTPRequest(BaseModel):
+    """Request to verify an OTP."""
+
+    email: EmailStr
+    otp_code: str
+
+
+class ResendOTPRequest(BaseModel):
+    """Request to resend an OTP to an unverified email."""
+
+    email: EmailStr
+
+
+class SuccessResponse(BaseModel):
+    """Generic success message response."""
+
+    message: str

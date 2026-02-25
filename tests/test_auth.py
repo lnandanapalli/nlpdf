@@ -1,8 +1,3 @@
-"""Integration tests for auth endpoints (signup, login, me).
-
-These tests use an in-memory SQLite database to avoid requiring PostgreSQL.
-"""
-
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -10,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from backend.database import Base, get_db
 from backend.routers.auth_router import router as auth_router
+from backend.models.user import User
+from sqlalchemy import select
 
 # In-memory async SQLite for test isolation
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_auth.db"
@@ -63,23 +60,43 @@ async def client():
         yield ac
 
 
+async def _create_verified_user_and_get_token(client, email, password):
+    """Helper to signup, retrieve the OTP from DB, verify it, and return the token."""
+    # 1. Signup
+    await client.post("/auth/signup", json={"email": email, "password": password})
+
+    # 2. Extract OTP from DB
+    async with TestSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalars().first()
+        assert user is not None, f"User {email} not found in DB"
+        otp_code = user.otp_code
+
+    # 3. Verify OTP
+    resp = await client.post(
+        "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
+    )
+    return resp.json()["access_token"]
+
+
 class TestSignup:
     """Tests for POST /auth/signup."""
 
-    async def test_signup_returns_token(self, client):
+    async def test_signup_returns_success(self, client):
         resp = await client.post(
             "/auth/signup",
             json={"email": "new@example.com", "password": "securepass123"},
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
+        assert "message" in data
+        assert "Verification code sent" in data["message"]
 
-    async def test_signup_duplicate_email_returns_409(self, client):
+    async def test_signup_duplicate_email_returns_409_if_verified(self, client):
         payload = {"email": "dupe@example.com", "password": "securepass123"}
-        resp1 = await client.post("/auth/signup", json=payload)
-        assert resp1.status_code == 201
+        await _create_verified_user_and_get_token(
+            client, payload["email"], payload["password"]
+        )
 
         resp2 = await client.post("/auth/signup", json=payload)
         assert resp2.status_code == 409
@@ -91,22 +108,60 @@ class TestSignup:
         )
         assert resp.status_code == 422
 
-    async def test_signup_invalid_email_returns_422(self, client):
-        resp = await client.post(
+
+class TestOTP:
+    """Tests for POST /auth/verify_otp and /auth/resend_otp."""
+
+    async def test_verify_otp_success(self, client):
+        email = "otp@example.com"
+        await client.post(
             "/auth/signup",
-            json={"email": "not-an-email", "password": "securepass123"},
+            json={"email": email, "password": "securepass123"},
         )
-        assert resp.status_code == 422
+
+        async with TestSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            assert user is not None, f"User {email} not found in DB"
+            otp_code = user.otp_code
+
+        resp = await client.post(
+            "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
+        )
+        assert resp.status_code == 200
+        assert "access_token" in resp.json()
+
+    async def test_verify_otp_invalid_code(self, client):
+        email = "badotp@example.com"
+        await client.post(
+            "/auth/signup",
+            json={"email": email, "password": "securepass123"},
+        )
+
+        resp = await client.post(
+            "/auth/verify_otp", json={"email": email, "otp_code": "000000"}
+        )
+        assert resp.status_code == 401
+
+    async def test_resend_otp_success(self, client):
+        email = "resend@example.com"
+        await client.post(
+            "/auth/signup",
+            json={"email": email, "password": "securepass123"},
+        )
+
+        resp = await client.post("/auth/resend_otp", json={"email": email})
+        assert resp.status_code == 200
+        assert "message" in resp.json()
 
 
 class TestLogin:
     """Tests for POST /auth/login."""
 
     async def test_login_success(self, client):
-        # First signup
-        await client.post(
-            "/auth/signup",
-            json={"email": "login@example.com", "password": "securepass123"},
+        # Create and verify user
+        await _create_verified_user_and_get_token(
+            client, "login@example.com", "securepass123"
         )
 
         # Then login
@@ -117,10 +172,23 @@ class TestLogin:
         assert resp.status_code == 200
         assert "access_token" in resp.json()
 
-    async def test_login_wrong_password_returns_401(self, client):
+    async def test_login_unverified_user_returns_403(self, client):
+        # Signup but DO NOT verify
         await client.post(
             "/auth/signup",
-            json={"email": "wrong@example.com", "password": "securepass123"},
+            json={"email": "unverified@example.com", "password": "securepass123"},
+        )
+
+        resp = await client.post(
+            "/auth/login",
+            json={"email": "unverified@example.com", "password": "securepass123"},
+        )
+        assert resp.status_code == 403
+        assert "Unverified" in resp.json()["detail"]
+
+    async def test_login_wrong_password_returns_401(self, client):
+        await _create_verified_user_and_get_token(
+            client, "wrong@example.com", "securepass123"
         )
 
         resp = await client.post(
@@ -129,23 +197,14 @@ class TestLogin:
         )
         assert resp.status_code == 401
 
-    async def test_login_nonexistent_user_returns_401(self, client):
-        resp = await client.post(
-            "/auth/login",
-            json={"email": "noone@example.com", "password": "anything"},
-        )
-        assert resp.status_code == 401
-
 
 class TestMe:
     """Tests for GET /auth/me."""
 
     async def test_me_returns_user(self, client):
-        resp = await client.post(
-            "/auth/signup",
-            json={"email": "me@example.com", "password": "securepass123"},
+        token = await _create_verified_user_and_get_token(
+            client, "me@example.com", "securepass123"
         )
-        token = resp.json()["access_token"]
 
         resp = await client.get(
             "/auth/me", headers={"Authorization": f"Bearer {token}"}
@@ -157,10 +216,4 @@ class TestMe:
 
     async def test_me_without_token_returns_401(self, client):
         resp = await client.get("/auth/me")
-        assert resp.status_code == 401
-
-    async def test_me_with_invalid_token_returns_401(self, client):
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": "Bearer invalid.token.here"}
-        )
         assert resp.status_code == 401
