@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:3000"]
     REQUEST_TIMEOUT_SECONDS: int = 120
 
+    # Database
+    DATABASE_URL: str = "postgresql+asyncpg://nlpdf:nlpdf@localhost:5432/nlpdf_db"
+
+    # JWT Authentication
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

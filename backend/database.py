@@ -3,15 +3,13 @@
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
 
-# Use SQLite for local development by default, can be overridden with asyncpg
-DATABASE_URL = "sqlite+aiosqlite:///./nlpdf.db"
+from backend.config import settings
 
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -19,6 +17,9 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+from sqlalchemy.orm import declarative_base  # noqa: E402
 
 Base = declarative_base()
 

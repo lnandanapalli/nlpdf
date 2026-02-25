@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.logging import setup_logging
 from backend.routers.llm_router import router as llm_router
+from backend.routers.auth_router import router as auth_router
 from backend.security import get_client_ip
 
 # Initialize structured logging before anything else
@@ -59,6 +60,7 @@ async def timeout_middleware(request: Request, call_next):
 
 
 app.include_router(llm_router)
+app.include_router(auth_router)
 
 
 @app.get("/")

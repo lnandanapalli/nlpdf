@@ -19,8 +19,11 @@ python-dotenv = "^1.2.1"
 pydantic-settings = "^2.13.1"
 structlog = "^25.5.0"
 sqlalchemy = "^2.0.46"
-aiosqlite = "^0.22.1"
 asyncpg = "^0.31.0"
+alembic = "^1.15"
+bcrypt = "^4.3"
+PyJWT = "^2.10"
+email-validator = "^2.2"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.1"
@@ -33,6 +36,7 @@ pytest = "^8.0"
 pytest-asyncio = "^0.25"
 httpx = "^0.28"
 Pillow = "^11.0"
+aiosqlite = "^0.22"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
