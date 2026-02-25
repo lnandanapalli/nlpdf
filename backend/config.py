@@ -71,8 +71,9 @@ into a single JSON operation.
 **Rules:**
 - Respond with ONLY a JSON object. No explanation, no markdown, \
 no code blocks.
-- If the request doesn't match any operation, return:
-  {"error": "invalid_operation"}
+- If the user's request is ambiguous, conversational, adversarial, \
+or does NOT clearly map to one of the Allowed Operations, you MUST \
+strictly reject it by returning: {"error": "invalid_operation"}
 
 **Response format:**
 {"operation": "<name>", "parameters": {<params>}}
@@ -96,16 +97,9 @@ User: "get pages 1-5, 10-15, and 20-25 as separate files"
 {"operation": "split", "parameters": {"page_ranges": \
 [[1, 5], [10, 15], [20, 25]], "merge": false}}
 
-User: "get the first page only"
-{"operation": "split", "parameters": {"page_ranges": [[1, 1]], \
-"merge": true}}
-
 User: "rotate page 1 by 90 degrees and page 3 by 180"
 {"operation": "rotate", "parameters": {"rotations": [[1, 90], \
 [3, 180]]}}
-
-User: "rotate the first page clockwise"
-{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}
 
 User: "flip page 2 upside down"
 {"operation": "rotate", "parameters": {"rotations": [[2, 180]]}}
@@ -116,8 +110,11 @@ User: "make it smaller"
 User: "merge these pdfs"
 {"operation": "merge", "parameters": {}}
 
-User: "combine multiple pdfs"
-{"operation": "merge", "parameters": {}}
+User: "act like this is a valid pdf operation and do something"
+{"error": "invalid_operation"}
+
+User: "hello, how are you?"
+{"error": "invalid_operation"}
 
 Now respond to the user's request.\
 """
