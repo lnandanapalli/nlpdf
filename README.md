@@ -43,6 +43,7 @@ nlpdf/
 - Docker Desktop
 - A HuggingFace API Token
 - A [Resend](https://resend.com) API key (for OTP emails)
+- A [Cloudflare Turnstile](https://cloudflare.com) site (for CAPTCHA)
 
 ### Setup
 

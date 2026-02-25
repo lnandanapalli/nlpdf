@@ -94,7 +94,7 @@ class TestProcessMessage:
             await llm_service.process_message("do something impossible")
 
         assert exc_info.value.status_code == 400
-        assert "Cannot do that" in exc_info.value.detail
+        assert "Please describe a valid PDF operation" in exc_info.value.detail
 
     async def test_all_retries_exhausted_raises_500(self, llm_service):
         llm_service._call_llm = AsyncMock(return_value="invalid json forever")

@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -44,6 +45,19 @@ app_instance.dependency_overrides[get_db] = _override_get_db
 
 
 @pytest.fixture(autouse=True)
+def _mock_turnstile():
+    """Bypass Cloudflare Turnstile verification in all auth tests."""
+    with patch(
+        "backend.routers.auth_router.verify_turnstile",
+        new=AsyncMock(return_value=True),
+    ):
+        yield
+
+
+CF_TOKEN = "test-token"
+
+
+@pytest.fixture(autouse=True)
 async def _setup_db():
     """Create and tear down test tables for each test."""
     async with test_engine.begin() as conn:
@@ -63,7 +77,10 @@ async def client():
 async def _create_verified_user_and_get_token(client, email, password):
     """Helper to signup, retrieve the OTP from DB, verify it, and return the token."""
     # 1. Signup
-    await client.post("/auth/signup", json={"email": email, "password": password})
+    await client.post(
+        "/auth/signup",
+        json={"email": email, "password": password, "cf_token": CF_TOKEN},
+    )
 
     # 2. Extract OTP from DB
     async with TestSessionLocal() as db:
@@ -85,7 +102,11 @@ class TestSignup:
     async def test_signup_returns_success(self, client):
         resp = await client.post(
             "/auth/signup",
-            json={"email": "new@example.com", "password": "securepass123"},
+            json={
+                "email": "new@example.com",
+                "password": "securepass123",
+                "cf_token": CF_TOKEN,
+            },
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -98,13 +119,19 @@ class TestSignup:
             client, payload["email"], payload["password"]
         )
 
-        resp2 = await client.post("/auth/signup", json=payload)
+        resp2 = await client.post(
+            "/auth/signup", json={**payload, "cf_token": CF_TOKEN}
+        )
         assert resp2.status_code == 409
 
     async def test_signup_short_password_returns_422(self, client):
         resp = await client.post(
             "/auth/signup",
-            json={"email": "short@example.com", "password": "short"},
+            json={
+                "email": "short@example.com",
+                "password": "short",
+                "cf_token": CF_TOKEN,
+            },
         )
         assert resp.status_code == 422
 
@@ -116,7 +143,7 @@ class TestOTP:
         email = "otp@example.com"
         await client.post(
             "/auth/signup",
-            json={"email": email, "password": "securepass123"},
+            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
         )
 
         async with TestSessionLocal() as db:
@@ -135,7 +162,7 @@ class TestOTP:
         email = "badotp@example.com"
         await client.post(
             "/auth/signup",
-            json={"email": email, "password": "securepass123"},
+            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
         )
 
         resp = await client.post(
@@ -147,7 +174,7 @@ class TestOTP:
         email = "resend@example.com"
         await client.post(
             "/auth/signup",
-            json={"email": email, "password": "securepass123"},
+            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
         )
 
         resp = await client.post("/auth/resend_otp", json={"email": email})
@@ -167,7 +194,11 @@ class TestLogin:
         # Then login
         resp = await client.post(
             "/auth/login",
-            json={"email": "login@example.com", "password": "securepass123"},
+            json={
+                "email": "login@example.com",
+                "password": "securepass123",
+                "cf_token": CF_TOKEN,
+            },
         )
         assert resp.status_code == 200
         assert "access_token" in resp.json()
@@ -176,12 +207,20 @@ class TestLogin:
         # Signup but DO NOT verify
         await client.post(
             "/auth/signup",
-            json={"email": "unverified@example.com", "password": "securepass123"},
+            json={
+                "email": "unverified@example.com",
+                "password": "securepass123",
+                "cf_token": CF_TOKEN,
+            },
         )
 
         resp = await client.post(
             "/auth/login",
-            json={"email": "unverified@example.com", "password": "securepass123"},
+            json={
+                "email": "unverified@example.com",
+                "password": "securepass123",
+                "cf_token": CF_TOKEN,
+            },
         )
         assert resp.status_code == 403
         assert "Unverified" in resp.json()["detail"]
@@ -193,7 +232,11 @@ class TestLogin:
 
         resp = await client.post(
             "/auth/login",
-            json={"email": "wrong@example.com", "password": "badpassword"},
+            json={
+                "email": "wrong@example.com",
+                "password": "badpassword",
+                "cf_token": CF_TOKEN,
+            },
         )
         assert resp.status_code == 401
 

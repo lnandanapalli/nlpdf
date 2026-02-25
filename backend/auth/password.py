@@ -1,13 +1,19 @@
-"""Password hashing and verification using bcrypt."""
+"""Password hashing and verification using Argon2 (argon2-cffi)."""
 
-import bcrypt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+
+_ph = PasswordHasher()
 
 
 def hash_password(plain: str) -> str:
-    """Hash a plaintext password using bcrypt."""
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    """Hash a plaintext password using Argon2id."""
+    return _ph.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    """Verify a plaintext password against an Argon2 hash."""
+    try:
+        return _ph.verify(hashed, plain)
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
