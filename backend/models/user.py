@@ -13,13 +13,13 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = Column(String(254), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(256), nullable=False)
 
     # Verification columns
     # Boolean as Integer 0/1 for SQLite compatibility or explicit Boolean
     is_verified = Column(Integer, default=False, nullable=False)
-    otp_code = Column(String, nullable=True)
+    otp_code = Column(String(6), nullable=True)
     otp_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     # Track statistics

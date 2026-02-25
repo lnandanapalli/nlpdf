@@ -1,20 +1,24 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: nlpdf_postgres
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: nlpdf_sqlserver
     environment:
-      POSTGRES_USER: nlpdf
-      POSTGRES_PASSWORD: nlpdf
-      POSTGRES_DB: nlpdf_db
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "NlpdfPass123!"
+      MSSQL_PID: "Express"
     ports:
-      - "5432:5432"
+      - "1433:1433"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mssqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nlpdf -d nlpdf_db"]
-      interval: 5s
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'NlpdfPass123!' -Q 'SELECT 1' -No",
+        ]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
-  pgdata:
+  mssqldata:
