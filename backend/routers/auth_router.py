@@ -27,6 +27,7 @@ from backend.schemas.auth_schema import (
     VerifyOTPRequest,
 )
 from backend.services.email_service import send_otp_email
+from backend.services.turnstile_service import verify_turnstile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -43,6 +44,12 @@ async def signup(
     db: AsyncSession = Depends(get_db),
 ) -> SuccessResponse:
     """Register a new user and return success message requiring OTP verification."""
+    if not await verify_turnstile(body.cf_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
+        )
+
     existing = await get_user_by_email(db, body.email)
 
     if existing is not None:
@@ -151,6 +158,12 @@ async def login(
     body: LoginRequest, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
     """Authenticate a user and return a JWT."""
+    if not await verify_turnstile(body.cf_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
+        )
+
     user = await get_user_by_email(db, body.email)
 
     if user is None or not verify_password(body.password, str(user.hashed_password)):

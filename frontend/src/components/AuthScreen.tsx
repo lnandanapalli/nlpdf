@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import axios from 'axios';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { 
   Box, Container, Typography, TextField, Button, 
   Alert, Paper, InputAdornment, IconButton
 } from '@mui/material';
 import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound } from 'lucide-react';
+
+const TURNSTILE_SITE_KEY = '0x4AAAAAACiFftjXsZL0PTZp';
 
 interface AuthScreenProps {
   onLogin: (token: string) => void;
@@ -22,6 +25,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [cfToken, setCfToken] = useState('');
+  const turnstileRef = useRef<TurnstileInstance>(null);
   
   // OTP states
   const [showOTP, setShowOTP] = useState(false);
@@ -56,11 +61,18 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       return;
     }
 
+    if (!cfToken) {
+      setError('Please complete the CAPTCHA');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         const response = await axios.post(`${API_BASE_URL}/auth/login`, {
           email,
-          password
+          password,
+          cf_token: cfToken,
         });
         const { access_token } = response.data;
         if (access_token) {
@@ -72,7 +84,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         // Signup
         await axios.post(`${API_BASE_URL}/auth/signup`, {
           email,
-          password
+          password,
+          cf_token: cfToken,
         });
         setSuccess('Verification code sent to your email.');
         setShowOTP(true);
@@ -135,6 +148,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setShowOTP(false);
     setConfirmPassword('');
     setShowConfirmPassword(false);
+    setCfToken('');
+    turnstileRef.current?.reset();
   };
 
   return (
@@ -243,6 +258,17 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     }}
                   />
                 )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onSuccess={(token) => setCfToken(token)}
+                    onError={() => setCfToken('')}
+                    onExpire={() => setCfToken('')}
+                    options={{ theme: 'light' }}
+                  />
+                </Box>
 
                 <Button
                   fullWidth

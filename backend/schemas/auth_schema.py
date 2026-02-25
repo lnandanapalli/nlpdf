@@ -10,6 +10,7 @@ class SignupRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    cf_token: str
 
 
 class LoginRequest(BaseModel):
@@ -17,6 +18,7 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+    cf_token: str
 
 
 class TokenResponse(BaseModel):
