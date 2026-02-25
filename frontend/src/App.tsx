@@ -9,7 +9,10 @@ import DragDropZone from './components/DragDropZone';
 import CommandInput from './components/CommandInput';
 import ProcessingState from './components/ProcessingState';
 import ResultCard from './components/ResultCard';
+import AuthScreen from './components/AuthScreen';
 import { processPDFs } from './services/api';
+
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 type AppState = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
@@ -19,7 +22,39 @@ function App() {
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultFilename, setResultFilename] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  
+  // Auth state
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Check token validity on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!token) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      try {
+        await axios.get(`${API_BASE_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setIsAuthenticated(true);
+      } catch {
+        // Token invalid or expired
+        localStorage.removeItem('token');
+        setToken(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [token]);
 
   // Auto-scroll to bottom of content area when state changes
   useEffect(() => {
@@ -43,7 +78,7 @@ function App() {
     setErrorMessage('');
     
     try {
-      const { blob, filename } = await processPDFs(files, command);
+      const { blob, filename } = await processPDFs(files, command, token);
       setResultBlob(blob);
       setResultFilename(filename);
       setAppState('SUCCESS');
@@ -80,6 +115,31 @@ function App() {
     }
   };
 
+  const handleLogin = (newToken: string) => {
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setIsAuthenticated(false);
+    handleReset();
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <Box sx={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
+        <Typography variant="h6" color="text.secondary">Loading...</Typography>
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', bgcolor: 'background.default', overflow: 'hidden' }}>
       {/* Header */}
@@ -91,14 +151,25 @@ function App() {
               NLPDF
             </Typography>
           </Box>
-          <MuiButton 
-            startIcon={<Github size={18} />} 
-            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-            href="https://github.com"
-            target="_blank"
-          >
-            Source
-          </MuiButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <MuiButton 
+              startIcon={<Github size={18} />} 
+              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+              href="https://github.com/lnandanapalli/nlpdf"
+              target="_blank"
+            >
+              Source
+            </MuiButton>
+            <MuiButton 
+              variant="outlined" 
+              color="inherit" 
+              size="small"
+              onClick={handleLogout}
+              sx={{ borderColor: 'divider', color: 'text.secondary' }}
+            >
+              Log Out
+            </MuiButton>
+          </Box>
         </Toolbar>
       </AppBar>
 

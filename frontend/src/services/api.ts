@@ -8,7 +8,7 @@ export interface ProcessPDFResponse {
   filename: string;
 }
 
-export const processPDFs = async (files: File[], command: string): Promise<ProcessPDFResponse> => {
+export const processPDFs = async (files: File[], command: string, token: string | null = null): Promise<ProcessPDFResponse> => {
   const formData = new FormData();
   
   // Attach all files
@@ -19,10 +19,16 @@ export const processPDFs = async (files: File[], command: string): Promise<Proce
   // Attach the natural language instruction
   formData.append('message', command);
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'multipart/form-data',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await axios.post(`${API_BASE_URL}/pdf/process`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    headers,
     // We expect a binary blob in return (PDF or ZIP)
     responseType: 'blob',
     // 3 minute timeout for potentially long LLM processing / huge PDFs

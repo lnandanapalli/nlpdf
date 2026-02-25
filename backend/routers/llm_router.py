@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse
 from pypdf import PdfReader
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth.dependencies import get_current_user
+from backend.crud.document_crud import create_document
+from backend.database import get_db
+from backend.models.user import User
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.operations_executor_service import execute_operation
@@ -31,6 +36,8 @@ async def process_with_llm(
         ),
     ),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """
     Process a PDF using natural language instructions.
@@ -94,13 +101,25 @@ async def process_with_llm(
         if result_path != output_path:
             temps.append(result_path)
 
-        # 5. Determine response type
         if result_path.suffix == ".zip":
             media_type = "application/zip"
             filename = f"{original_name}_split.zip"
         else:
             media_type = "application/pdf"
             filename = f"{operation.operation}_{original_name}.pdf"
+
+        # 6. Save document record to Database
+        out_size_mb = str(round(result_path.stat().st_size / (1024 * 1024), 2))
+
+        await create_document(
+            db=db,
+            owner_id=int(current_user.id),  # type: ignore
+            original_filename=original_name,
+            operation_type=operation.operation,
+            input_size_mb=str(total_size),
+            output_size_mb=out_size_mb,
+            page_count=total_pages,
+        )
 
         return FileResponse(
             path=result_path,
