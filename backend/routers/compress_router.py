@@ -8,9 +8,9 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from backend.schemas import CompressParams
+from backend.schemas.compress_schema import CompressParams
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
-from backend.services import compress_pdf
+from backend.services.compress_service import compress_pdf
 
 logger = logging.getLogger("nlpdf.compress")
 

@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.validators import validate_rotation_specs
+from backend.validators.rotation_validators import validate_rotation_specs
 
 
 class RotateParams(BaseModel):

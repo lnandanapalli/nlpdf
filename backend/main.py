@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.logging import setup_logging
-from backend.routers import llm_router
+from backend.routers.llm_router import router as llm_router
 from backend.security import get_client_ip
 
 # Initialize structured logging before anything else

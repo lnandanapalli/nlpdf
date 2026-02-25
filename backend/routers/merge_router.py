@@ -13,7 +13,7 @@ from backend.security import (
     cleanup_files,
     validate_and_save_pdf,
 )
-from backend.services import merge_pdfs
+from backend.services.merge_service import merge_pdfs
 
 logger = logging.getLogger("nlpdf.merge")
 

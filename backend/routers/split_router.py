@@ -9,9 +9,9 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
-from backend.schemas import SplitParams
+from backend.schemas.split_schema import SplitParams
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
-from backend.services import split_pdf
+from backend.services.split_service import split_pdf
 
 logger = logging.getLogger("nlpdf.split")
 

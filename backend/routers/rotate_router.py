@@ -9,9 +9,9 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
-from backend.schemas import RotateParams
+from backend.schemas.rotate_schema import RotateParams
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
-from backend.services import rotate_pdf
+from backend.services.rotate_service import rotate_pdf
 
 logger = logging.getLogger("nlpdf.rotate")
 

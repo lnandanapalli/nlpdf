@@ -11,8 +11,8 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
-from backend.services.llm_executor import execute_operation
 from backend.services.llm_service import LLMService, get_llm_service
+from backend.services.operations_executor_service import execute_operation
 
 logger = logging.getLogger("nlpdf.llm")
 
@@ -83,7 +83,11 @@ async def process_with_llm(
             original_name = "merged_documents"
 
         result_path = await run_in_threadpool(
-            execute_operation, operation, input_paths, output_path, original_name
+            execute_operation,
+            operation,
+            input_paths,
+            output_path,
+            original_name,
         )
 
         # Update temps in case executor changed the output path (.zip)

@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.validators import validate_page_ranges
+from backend.validators.page_validators import validate_page_ranges
 
 
 class SplitParams(BaseModel):
