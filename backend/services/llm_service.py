@@ -113,7 +113,14 @@ class LLMService:
 
             # Step 3: Check if LLM returned an error object
             if "error" in parsed:
-                raise HTTPException(status_code=400, detail=parsed["error"])
+                # Security: NEVER pass the LLM's raw text to the user
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "This operation cannot be performed. "
+                        "Please describe a valid PDF operation."
+                    ),
+                )
 
             # Step 4: Validate against operation schemas
             try:

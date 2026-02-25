@@ -1,5 +1,12 @@
 """NLPDF API application."""
 
+import asyncio
+import sys
+
+# Workaround for ConnectionResetError on Windows with ProactorEventLoop
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +34,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ALLOW_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
     max_age=600,
 )
 

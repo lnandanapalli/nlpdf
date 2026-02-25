@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.01
 
     # API Config
-    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ALLOW_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
     REQUEST_TIMEOUT_SECONDS: int = 120
 
     # Database
@@ -67,9 +71,8 @@ into a single JSON operation.
 **Rules:**
 - Respond with ONLY a JSON object. No explanation, no markdown, \
 no code blocks.
-- Choose exactly ONE operation.
 - If the request doesn't match any operation, return:
-  {"error": "description of why this can't be done"}
+  {"error": "invalid_operation"}
 
 **Response format:**
 {"operation": "<name>", "parameters": {<params>}}

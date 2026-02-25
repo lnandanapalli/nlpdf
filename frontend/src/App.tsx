@@ -49,15 +49,34 @@ function App() {
       setAppState('SUCCESS');
     } catch (error: unknown) {
       setAppState('ERROR');
-      if (axios.isAxiosError(error) && error.response?.data?.detail) {
-        setErrorMessage(
-          typeof error.response.data.detail === 'string' 
-            ? error.response.data.detail 
-            : JSON.stringify(error.response.data.detail)
-        );
-      } else {
-        setErrorMessage('An unexpected error occurred while communicating with the server.');
+      
+      if (axios.isAxiosError(error) && error.response?.data) {
+        let errorDetail = null;
+        
+        // When responseType is 'blob', axios returns the error JSON as a Blob
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text();
+            const json = JSON.parse(text);
+            errorDetail = json.detail;
+          } catch (e) {
+            console.error('Failed to parse error blob', e);
+          }
+        } else {
+          errorDetail = error.response.data.detail;
+        }
+
+        if (errorDetail) {
+          setErrorMessage(
+            typeof errorDetail === 'string' 
+              ? errorDetail 
+              : JSON.stringify(errorDetail)
+          );
+          return;
+        }
       }
+      
+      setErrorMessage('An unexpected error occurred while communicating with the server.');
     }
   };
 
