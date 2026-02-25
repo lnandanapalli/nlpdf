@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = 3
     LLM_RETRY_DELAY: float = 1.0
 
+    # LLM Generation Config
+    LLM_MAX_TOKENS: int = 256
+    LLM_TEMPERATURE: float = 0.01
+
+    # API Config
+    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:3000"]
+    REQUEST_TIMEOUT_SECONDS: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
@@ -23,11 +31,6 @@ class Settings(BaseSettings):
 settings = Settings()  # type: ignore
 
 # --- LLM Constants ---
-GENERATION_CONFIG = {
-    "max_tokens": 256,
-    "temperature": 0.01,
-}
-
 SYSTEM_PROMPT = """\
 You are a PDF processing assistant. Users describe what they want \
 to do with their PDF file. Your job is to translate their request \

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
+from backend.config import settings
 from backend.logging import setup_logging
 from backend.routers import llm_router
 from backend.security import get_client_ip
@@ -22,7 +23,7 @@ app.state.limiter = limiter
 
 app.add_middleware(
     CORSMiddleware,  # type: ignore
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     max_age=600,
@@ -40,16 +41,13 @@ async def rate_limit_handler(
     )
 
 
-REQUEST_TIMEOUT_SECONDS = 120
-
-
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
     import asyncio
 
     try:
         response = await asyncio.wait_for(
-            call_next(request), timeout=REQUEST_TIMEOUT_SECONDS
+            call_next(request), timeout=settings.REQUEST_TIMEOUT_SECONDS
         )
     except asyncio.TimeoutError:
         logger.warning("request_timeout", path=request.url.path)

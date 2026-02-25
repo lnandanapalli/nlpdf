@@ -9,9 +9,6 @@ import structlog
 def setup_logging(log_level: int = logging.INFO) -> None:
     """
     Configure structlog and standard logging.
-
-    This replaces the standard library logging formatters with structlog's
-    JSON formatter for production (or a clear console renderer for local dev).
     """
     logging.basicConfig(
         format="%(message)s",

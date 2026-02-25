@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 from huggingface_hub import AsyncInferenceClient
 
-from backend.config import GENERATION_CONFIG, SYSTEM_PROMPT, settings
+from backend.config import SYSTEM_PROMPT, settings
 from backend.schemas.llm_schema import OperationType, validate_llm_json
 
 logger = logging.getLogger("nlpdf.llm")
@@ -62,8 +62,8 @@ class LLMService:
             response = await self.client.chat_completion(
                 messages=messages,
                 model=self.model,
-                max_tokens=int(GENERATION_CONFIG.get("max_tokens", 256)),
-                temperature=float(GENERATION_CONFIG.get("temperature", 0.01)),
+                max_tokens=settings.LLM_MAX_TOKENS,
+                temperature=settings.LLM_TEMPERATURE,
             )
             content = response.choices[0].message.content
             if content is None:
