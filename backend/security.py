@@ -33,6 +33,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
     total_size = 0
     first_chunk = True
     chunk_size = 1024 * 1024  # 1 MB chunks
+    error: HTTPException | None = None
 
     with open(dest, "wb") as f:
         while True:
@@ -42,23 +43,27 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
 
             if first_chunk:
                 if not chunk[:5].startswith(PDF_MAGIC_BYTES):
-                    dest.unlink(missing_ok=True)
-                    raise HTTPException(
+                    error = HTTPException(
                         status_code=400,
                         detail=f"File '{upload.filename}' is not a valid PDF",
                     )
+                    break
                 first_chunk = False
 
             total_size += len(chunk)
             if total_size > MAX_FILE_SIZE_BYTES:
-                dest.unlink(missing_ok=True)
-                raise HTTPException(
+                error = HTTPException(
                     status_code=413,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
                 )
+                break
 
             f.write(chunk)
+
+    if error is not None:
+        dest.unlink(missing_ok=True)
+        raise error
 
     if total_size == 0:
         dest.unlink(missing_ok=True)
