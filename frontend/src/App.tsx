@@ -137,7 +137,7 @@ function App() {
         </Toolbar>
       </AppBar>
 
-      {/* Main content — grows to fill remaining height */}
+      {/* Main content */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', py: { xs: 2, md: 3 }, px: { xs: 2, md: 0 } }}>
         <Container maxWidth="md" sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
 
@@ -181,7 +181,7 @@ function App() {
         </Container>
       </Box>
 
-      {/* Pinned command input */}
+      {/* Command input */}
       <Box
         sx={{
           flexShrink: 0,

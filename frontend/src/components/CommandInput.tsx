@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { Box, Typography, TextField, InputAdornment, IconButton, Chip } from '@mui/material';
 import { Send } from 'lucide-react';
 
@@ -17,7 +17,7 @@ const SUGGESTIONS = [
 export default function CommandInput({ onProcess, disabled }: CommandInputProps) {
   const [command, setCommand] = useState('');
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = (e?: SubmitEvent) => {
     if (e) e.preventDefault();
     if (command.trim() && !disabled) {
       onProcess(command.trim());
@@ -82,25 +82,27 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
               '&.Mui-focused fieldset': { borderColor: 'primary.main' },
             },
           }}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end" sx={{ alignSelf: 'flex-end', mb: 0.5 }}>
-                <IconButton
-                  type="submit"
-                  disabled={!canSubmit}
-                  color="primary"
-                  sx={{
-                    bgcolor: canSubmit ? 'primary.main' : 'action.disabledBackground',
-                    color: canSubmit ? 'background.default' : 'text.disabled',
-                    borderRadius: 2,
-                    p: 1,
-                    '&:hover': { bgcolor: canSubmit ? 'primary.light' : 'action.disabledBackground' },
-                  }}
-                >
-                  <Send size={18} />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end" sx={{ alignSelf: 'flex-end', mb: 0.5 }}>
+                  <IconButton
+                    type="submit"
+                    disabled={!canSubmit}
+                    color="primary"
+                    sx={{
+                      bgcolor: canSubmit ? 'primary.main' : 'action.disabledBackground',
+                      color: canSubmit ? 'background.default' : 'text.disabled',
+                      borderRadius: 2,
+                      p: 1,
+                      '&:hover': { bgcolor: canSubmit ? 'primary.light' : 'action.disabledBackground' },
+                    }}
+                  >
+                    <Send size={18} />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
       </form>

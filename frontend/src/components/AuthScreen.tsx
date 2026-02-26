@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState, type SubmitEvent } from 'react';
 import axios from 'axios';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import {
@@ -41,7 +41,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: SubmitEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -80,7 +80,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
   };
 
-  const handleVerifyOTP = async (e: React.FormEvent) => {
+  const handleVerifyOTP = async (e: SubmitEvent) => {
     e.preventDefault();
     if (!otpCode) { setError('Please enter the verification code'); return; }
 
@@ -151,12 +151,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   fullWidth label="Email" type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   sx={{ mb: 2 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Mail size={20} color={iconColor} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Mail size={20} color={iconColor} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                 />
 
@@ -164,19 +166,21 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   fullWidth label="Password" type={showPassword ? 'text' : 'password'}
                   value={password} onChange={(e) => setPassword(e.target.value)}
                   sx={{ mb: !isLogin ? 2 : 3 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock size={20} color={iconColor} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock size={20} color={iconColor} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                 />
 
@@ -186,19 +190,21 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                     sx={{ mb: 3 }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock size={20} color={iconColor} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small">
-                            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock size={20} color={iconColor} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small">
+                              {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
                 )}
@@ -236,12 +242,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   fullWidth label="6-digit Verification Code" type="text"
                   value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
                   sx={{ mb: 3 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <KeyRound size={20} color={iconColor} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <KeyRound size={20} color={iconColor} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                 />
 
