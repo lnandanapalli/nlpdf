@@ -1,53 +1,43 @@
 import axios from 'axios';
 
-// Ensure the local dev server is pointing to the FastAPI backend
-const API_BASE_URL = 'http://127.0.0.1:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
+
+const PDF_PROCESSING_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
 export interface ProcessPDFResponse {
   blob: Blob;
   filename: string;
 }
 
-export const processPDFs = async (files: File[], command: string, token: string | null = null): Promise<ProcessPDFResponse> => {
+export const processPDFs = async (
+  files: File[],
+  command: string,
+  token: string | null = null,
+): Promise<ProcessPDFResponse> => {
   const formData = new FormData();
-  
-  // Attach all files
-  files.forEach((file) => {
-    formData.append('files', file);
-  });
-  
-  // Attach the natural language instruction
+  files.forEach((file) => formData.append('files', file));
   formData.append('message', command);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'multipart/form-data',
-  };
-  
+  const headers: Record<string, string> = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await axios.post(`${API_BASE_URL}/pdf/process`, formData, {
     headers,
-    // We expect a binary blob in return (PDF or ZIP)
     responseType: 'blob',
-    // 3 minute timeout for potentially long LLM processing / huge PDFs
-    timeout: 180000, 
+    timeout: PDF_PROCESSING_TIMEOUT_MS,
   });
 
-  // Extract filename from the Content-Disposition header if available
+  // Extract filename from Content-Disposition header if present
   let filename = 'result_document.pdf';
-  const disposition = response.headers['content-disposition'];
-  if (disposition && disposition.indexOf('attachment') !== -1) {
-    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-    const matches = filenameRegex.exec(disposition);
-    if (matches != null && matches[1]) { 
-      filename = matches[1].replace(/['"]/g, '');
+  const disposition: string | undefined = response.headers['content-disposition'];
+  if (disposition) {
+    const match = /filename\*?=(?:UTF-8'')?["']?([^"';\n]+)["']?/i.exec(disposition);
+    if (match?.[1]) {
+      filename = decodeURIComponent(match[1].trim());
     }
   }
 
-  return {
-    blob: response.data,
-    filename,
-  };
+  return { blob: response.data, filename };
 };

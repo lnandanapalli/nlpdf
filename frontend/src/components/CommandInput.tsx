@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, TextField, Button, InputAdornment, IconButton } from '@mui/material';
+import { Box, Typography, TextField, InputAdornment, IconButton, Chip } from '@mui/material';
 import { Send } from 'lucide-react';
 
 interface CommandInputProps {
@@ -8,10 +8,10 @@ interface CommandInputProps {
 }
 
 const SUGGESTIONS = [
-  "Merge these PDFs",
-  "Compress this file heavily",
-  "Extract the first 5 pages",
-  "Rotate page 1 by 90 degrees"
+  'Merge these PDFs',
+  'Compress this file heavily',
+  'Extract the first 5 pages',
+  'Rotate page 1 by 90 degrees',
 ];
 
 export default function CommandInput({ onProcess, disabled }: CommandInputProps) {
@@ -24,35 +24,31 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
     }
   };
 
+  const canSubmit = !!command.trim() && !disabled;
+
   return (
-    <Box sx={{ width: '100%', position: 'relative' }}>
-      <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+    <Box sx={{ width: '100%' }}>
+      {/* Suggestion chips */}
+      <Box sx={{ mb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
         {SUGGESTIONS.map((suggestion) => (
-          <Button
+          <Chip
             key={suggestion}
-            variant="outlined"
+            label={suggestion}
             size="small"
+            variant="outlined"
             disabled={disabled}
             onClick={() => setCommand(suggestion)}
-            sx={{ 
-              borderRadius: 20, 
-              textTransform: 'none', 
-              fontSize: '0.8rem',
+            sx={{
               borderColor: 'divider',
               color: 'text.secondary',
-              bgcolor: 'background.paper',
-              '&:hover': {
-                borderColor: 'primary.main',
-                color: 'primary.main',
-                bgcolor: 'rgba(138, 180, 248, 0.08)'
-              }
+              fontSize: '0.8rem',
+              '&:hover': { borderColor: 'primary.main', color: 'primary.main' },
             }}
-          >
-            {suggestion}
-          </Button>
+          />
         ))}
       </Box>
 
+      {/* Command text field */}
       <form onSubmit={handleSubmit}>
         <TextField
           fullWidth
@@ -60,7 +56,7 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
           minRows={1}
           maxRows={6}
           disabled={disabled}
-          placeholder={disabled ? "Please upload a PDF first..." : "Message NLPDF..."}
+          placeholder={disabled ? 'Upload a PDF first…' : 'Message NLPDF…'}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={(e) => {
@@ -71,36 +67,34 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
           }}
           sx={{
             '& .MuiOutlinedInput-root': {
-              borderRadius: 6, /* Very round like ChatGPT */
-              backgroundColor: 'background.paper',
-              transition: 'all 0.2s',
+              borderRadius: 6,
+              bgcolor: 'background.paper',
               fontSize: '1rem',
-              p: '12px 20px',
-              fontFamily: 'Inter, sans-serif',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+              px: '20px',
+              py: '12px',
+              transition: 'box-shadow 0.2s',
+              boxShadow: (t) => t.shadows[2],
               '&.Mui-focused': {
-                boxShadow: '0 4px 16px rgba(138, 180, 248, 0.15)',
+                boxShadow: (t) => `0 4px 16px ${t.palette.primary.main}26`,
               },
-              '& fieldset': { border: '1px solid rgba(255,255,255,0.1)' },
-              '&:hover fieldset': { border: '1px solid rgba(255,255,255,0.2)' },
-              '&.Mui-focused fieldset': { border: '1px solid #8ab4f8' },
-            }
+              '& fieldset': { borderColor: 'divider' },
+              '&:hover fieldset': { borderColor: 'text.disabled' },
+              '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+            },
           }}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end" sx={{ alignSelf: 'flex-end', mb: 0.5 }}>
                 <IconButton
                   type="submit"
-                  disabled={disabled || !command.trim()}
+                  disabled={!canSubmit}
                   color="primary"
-                  sx={{ 
-                    bgcolor: command.trim() && !disabled ? 'primary.main' : 'action.disabledBackground',
-                    color: command.trim() && !disabled ? '#202124' : 'text.disabled',
+                  sx={{
+                    bgcolor: canSubmit ? 'primary.main' : 'action.disabledBackground',
+                    color: canSubmit ? 'background.default' : 'text.disabled',
                     borderRadius: 2,
                     p: 1,
-                    '&:hover': {
-                      bgcolor: command.trim() && !disabled ? 'primary.light' : 'action.disabledBackground',
-                    }
+                    '&:hover': { bgcolor: canSubmit ? 'primary.light' : 'action.disabledBackground' },
                   }}
                 >
                   <Send size={18} />
@@ -110,8 +104,8 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
           }}
         />
       </form>
-      
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5 }}>
+
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
         NLPDF can make mistakes. Please verify important documents.
       </Typography>
     </Box>
