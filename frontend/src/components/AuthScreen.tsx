@@ -7,8 +7,9 @@ import {
 } from '@mui/material';
 import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
+import { config } from '../config';
 
-const TURNSTILE_SITE_KEY = '0x4AAAAAACiFftjXsZL0PTZp';
+const TURNSTILE_SITE_KEY = config.turnstileSiteKey;
 
 interface AuthScreenProps {
   onLogin: (token: string) => void;

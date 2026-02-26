@@ -4,17 +4,17 @@ const theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#8ab4f8', // Authentic Google Material Dark Blue
+      main: '#8ab4f8',
     },
     secondary: {
-      main: '#f28b82', // Authentic Google Material Dark Red/Pink
+      main: '#f28b82',
     },
     background: {
-      default: '#202124', // Google standard dark mode background
-      paper: '#292a2d',   // Google elevated surface
+      default: '#202124',
+      paper: '#292a2d',
     },
     text: {
-      primary: '#e8eaed', // Standard Google light text
+      primary: '#e8eaed',
       secondary: '#9aa0a6',
     },
     divider: 'rgba(255, 255, 255, 0.12)',
@@ -23,7 +23,7 @@ const theme = createTheme({
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     h3: {
       fontWeight: 600,
-      letterSpacing: '-0.02em', // Premium, tight heading
+      letterSpacing: '-0.02em',
     },
     h6: {
       fontWeight: 500,
@@ -35,7 +35,7 @@ const theme = createTheme({
     },
     subtitle1: {
       fontWeight: 500,
-    }
+    },
   },
   shape: {
     borderRadius: 16,
@@ -48,7 +48,7 @@ const theme = createTheme({
           padding: '8px 24px',
         },
         containedPrimary: {
-          color: '#202124', // Dark text on light blue, very Google
+          color: '#202124',
           fontWeight: 600,
         },
       },
@@ -56,7 +56,7 @@ const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          backgroundImage: 'none', // Strip default MUI overlay
+          backgroundImage: 'none',
         },
       },
     },
@@ -67,7 +67,7 @@ const theme = createTheme({
         },
         notchedOutline: {
           borderColor: '#5f6368',
-        }
+        },
       },
     },
   },

@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { config } from '../config';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
+export const API_BASE_URL = config.apiBaseUrl;
 
 const PDF_PROCESSING_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
@@ -12,19 +13,14 @@ export interface ProcessPDFResponse {
 export const processPDFs = async (
   files: File[],
   command: string,
-  token: string | null = null,
+  token: string,
 ): Promise<ProcessPDFResponse> => {
   const formData = new FormData();
   files.forEach((file) => formData.append('files', file));
   formData.append('message', command);
 
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const response = await axios.post(`${API_BASE_URL}/pdf/process`, formData, {
-    headers,
+    headers: { Authorization: `Bearer ${token}` },
     responseType: 'blob',
     timeout: PDF_PROCESSING_TIMEOUT_MS,
   });

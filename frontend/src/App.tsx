@@ -4,7 +4,8 @@ import {
   Container, Typography, Box, Alert, Slide,
   AppBar, Toolbar, Button as MuiButton, useTheme,
 } from '@mui/material';
-import { Sparkles, Github } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import DragDropZone from './components/DragDropZone';
 import CommandInput from './components/CommandInput';
 import ProcessingState from './components/ProcessingState';
@@ -54,7 +55,7 @@ function App() {
     setErrorMessage('');
 
     try {
-      const { blob, filename } = await processPDFs(files, command, token);
+      const { blob, filename } = await processPDFs(files, command, token!);
       setResultBlob(blob);
       setResultFilename(filename);
       setAppState('SUCCESS');
@@ -117,12 +118,12 @@ function App() {
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <MuiButton
-              startIcon={<Github size={18} />}
+              startIcon={<GitHubIcon fontSize="small" />}
               sx={{ color: 'text.secondary' }}
               href="https://github.com/lnandanapalli/nlpdf"
               target="_blank"
             >
-              Source
+              GitHub
             </MuiButton>
             <MuiButton
               variant="outlined"
