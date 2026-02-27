@@ -27,10 +27,7 @@ def execute_operation(
     original_filename: str = "document",
 ) -> Path:
     """
-    Execute a validated operation using existing services.
-
-    Parameters are already validated by the schema layer - no need
-    to re-validate here.
+    Execute a single validated operation.
 
     Returns:
         Path to the output file.
@@ -50,7 +47,7 @@ def execute_operation(
                 )
             return merge_pdfs(input_paths, output_path)
 
-        # For non-merge operations, we just execute on the first provided file
+        # For non-merge operations, execute on the first provided file
         main_input = input_paths[0]
 
         if isinstance(operation, CompressOperation):
@@ -80,5 +77,66 @@ def execute_operation(
             detail=f"PDF operation failed: {e}",
         )
 
-    # Unreachable, but satisfies type checker
     raise HTTPException(status_code=400, detail="Unknown operation")
+
+
+def execute_operation_chain(
+    operations: list[OperationType],
+    input_paths: list[Path],
+    output_dir: Path,
+    original_filename: str = "document",
+) -> Path:
+    """
+    Execute a chain of operations sequentially.
+
+    Each operation's output becomes the next operation's input.
+
+    Args:
+        operations: Ordered list of validated operations.
+        input_paths: Initial input file paths.
+        output_dir: Directory to write intermediate and final outputs.
+        original_filename: Base name for the output file.
+
+    Returns:
+        Path to the final output file.
+
+    Raises:
+        HTTPException: If any operation fails.
+    """
+    if len(operations) == 1:
+        output_path = output_dir / "output.pdf"
+        return execute_operation(
+            operations[0], input_paths, output_path, original_filename
+        )
+
+    current_inputs = input_paths
+    result_path: Path | None = None
+    intermediates: list[Path] = []
+
+    for i, operation in enumerate(operations):
+        is_last = i == len(operations) - 1
+
+        if is_last:
+            step_output = output_dir / "output.pdf"
+        else:
+            step_output = output_dir / f"step_{i}.pdf"
+            intermediates.append(step_output)
+
+        result_path = execute_operation(
+            operation, current_inputs, step_output, original_filename
+        )
+
+        # Next step takes this step's output as its single input
+        current_inputs = [result_path]
+
+    # Clean up intermediate files
+    for intermediate in intermediates:
+        try:
+            if intermediate.exists() and intermediate != result_path:
+                intermediate.unlink()
+        except OSError:
+            pass
+
+    if result_path is None:
+        raise HTTPException(status_code=400, detail="No operations to execute")
+    return result_path

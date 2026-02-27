@@ -17,7 +17,7 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
 from backend.services.llm_service import LLMService, get_llm_service
-from backend.services.operations_executor_service import execute_operation
+from backend.services.operations_executor_service import execute_operation_chain
 
 logger = logging.getLogger("nlpdf.llm")
 
@@ -32,7 +32,7 @@ async def process_with_llm(
         description=(
             "Natural language instruction for PDF processing. "
             "Examples: 'compress this', 'extract first 10 pages', "
-            "'merge these files'"
+            "'merge these files', 'merge and rotate page 2'"
         ),
     ),
     llm_service: LLMService = Depends(get_llm_service),
@@ -40,19 +40,19 @@ async def process_with_llm(
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """
-    Process a PDF using natural language instructions.
+    Process PDF(s) using natural language instructions.
 
-    The LLM interprets the message and executes the appropriate
-    operation: compress, split, or rotate.
+    Supports chained operations (e.g. "merge then compress").
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
     file_id = uuid.uuid4().hex
-    output_path = UPLOAD_DIR / f"{file_id}_out.pdf"
+    output_dir = UPLOAD_DIR / file_id
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     input_paths = []
-    temps = [output_path]
+    temps: list[Path] = [output_dir]
     for i, file in enumerate(files):
         in_path = UPLOAD_DIR / f"{file_id}_{i}.pdf"
         input_paths.append(in_path)
@@ -78,44 +78,42 @@ async def process_with_llm(
             "total_file_size_mb": total_size,
         }
 
-        # 3. LLM: parse message -> validate -> typed operation
-        operation = await llm_service.process_message(
+        # 3. LLM: parse message -> validate -> typed operations
+        operations = await llm_service.process_message(
             user_message=message,
             pdf_metadata=combined_metadata,
         )
 
-        # 4. Execute the operation
+        # 4. Execute the operation chain
         original_name = (files[0].filename or "document").rsplit(".", 1)[0]
         if len(files) > 1:
             original_name = "merged_documents"
 
         result_path = await run_in_threadpool(
-            execute_operation,
-            operation,
+            execute_operation_chain,
+            operations,
             input_paths,
-            output_path,
+            output_dir,
             original_name,
         )
-
-        # Update temps in case executor changed the output path (.zip)
-        if result_path != output_path:
-            temps.append(result_path)
 
         if result_path.suffix == ".zip":
             media_type = "application/zip"
             filename = f"{original_name}_split.zip"
         else:
             media_type = "application/pdf"
-            filename = f"{operation.operation}_{original_name}.pdf"
+            last_op = operations[-1].operation
+            filename = f"{last_op}_{original_name}.pdf"
 
-        # 6. Save document record to Database
+        # 5. Save document record to database
         out_size_mb = str(round(result_path.stat().st_size / (1024 * 1024), 2))
+        op_type = ",".join(op.operation for op in operations)
 
         await create_document(
             db=db,
             owner_id=int(current_user.id),  # type: ignore
             original_filename=original_name,
-            operation_type=operation.operation,
+            operation_type=op_type,
             input_size_mb=str(total_size),
             output_size_mb=out_size_mb,
             page_count=total_pages,

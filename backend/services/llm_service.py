@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from huggingface_hub import AsyncInferenceClient
 
 from backend.config import SYSTEM_PROMPT, settings
-from backend.schemas.llm_schema import OperationType, validate_llm_json
+from backend.schemas.llm_schema import OperationType, validate_llm_json_list
 
 logger = logging.getLogger("nlpdf.llm")
 
@@ -80,15 +80,15 @@ class LLMService:
         self,
         user_message: str,
         pdf_metadata: dict[str, Any] | None = None,
-    ) -> OperationType:
+    ) -> list[OperationType]:
         """
-        Generate and validate an operation from a user message.
+        Generate and validate operations from a user message.
 
         Retries up to LLM_MAX_RETRIES times on parse/validation
         failures, feeding the error back to the LLM each time.
 
         Returns:
-            A fully validated, typed operation model.
+            A list of fully validated, typed operation models.
 
         Raises:
             HTTPException: On LLM errors or if all retries exhausted.
@@ -101,19 +101,28 @@ class LLMService:
             raw = await self._call_llm(user_message, pdf_metadata, retry_context)
             logger.info("LLM attempt %d/%d raw: %s", attempt, max_retries, raw)
 
-            # Step 2: Parse JSON (strip code fences if LLM wraps them)
+            # Step 2: Parse JSON
             cleaned = _extract_json(raw)
-            try:
-                parsed = json.loads(cleaned)
-            except json.JSONDecodeError as e:
-                retry_context = f"Response was not valid JSON: {e}"
+            parsed = _parse_json(cleaned)
+
+            if parsed is None:
+                retry_context = f"Response was not valid JSON: {cleaned!r}"
+                logger.warning("Attempt %d: %s", attempt, retry_context)
+                await asyncio.sleep(settings.LLM_RETRY_DELAY)
+                continue
+
+            # Normalize: wrap a single dict in a list
+            if isinstance(parsed, dict):
+                parsed = [parsed]
+
+            if not isinstance(parsed, list):
+                retry_context = "Response must be a JSON array of operations"
                 logger.warning("Attempt %d: %s", attempt, retry_context)
                 await asyncio.sleep(settings.LLM_RETRY_DELAY)
                 continue
 
             # Step 3: Check if LLM returned an error object
-            if "error" in parsed:
-                # Security: NEVER pass the LLM's raw text to the user
+            if any("error" in item for item in parsed):
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -124,20 +133,21 @@ class LLMService:
 
             # Step 4: Validate against operation schemas
             try:
-                operation = validate_llm_json(parsed)
+                operations = validate_llm_json_list(parsed)
             except ValueError as e:
                 retry_context = str(e)
                 logger.warning("Attempt %d: %s", attempt, retry_context)
                 await asyncio.sleep(settings.LLM_RETRY_DELAY)
                 continue
 
-            logger.info("Validated operation: %s", operation.operation)
-            return operation
+            op_names = [op.operation for op in operations]
+            logger.info("Validated operations: %s", op_names)
+            return operations
 
         raise HTTPException(
             status_code=500,
             detail=(
-                f"Failed to produce a valid operation "
+                f"Failed to produce valid operations "
                 f"after {max_retries} attempts. "
                 f"Last issue: {retry_context}"
             ),
@@ -153,9 +163,30 @@ def _extract_json(text: str) -> str:
     return text.strip()
 
 
-# Cache the LLMService singleton manually or recreate it per request if lightweight.
-# We hold a single instance here so that dependency injection always yields the same
-# configured inference client rather than instantiating it per inference.
+def _parse_json(text: str) -> Any:
+    """
+    Parse JSON, with fallback for multi-line JSON objects.
+
+    Some LLMs return one JSON object per line instead of a proper array.
+    If standard parsing fails, try joining lines into an array.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: try parsing each non-empty line as a separate JSON object
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > 1:
+        try:
+            return [json.loads(line) for line in lines]
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
+# Singleton LLM service instance
 _llm_service: LLMService | None = None
 
 

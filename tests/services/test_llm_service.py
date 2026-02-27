@@ -66,29 +66,62 @@ class TestProcessMessage:
             yield service
 
     async def test_valid_json_first_attempt(self, llm_service):
-        response_json = '{"operation": "compress", "parameters": {"level": 2}}'
+        response_json = '[{"operation": "compress", "parameters": {"level": 2}}]'
         llm_service._call_llm = AsyncMock(return_value=response_json)
 
         result = await llm_service.process_message("compress this pdf")
 
-        assert result.operation == "compress"
-        assert result.parameters.level == 2
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].operation == "compress"
+        assert result[0].parameters.level == 2
+
+    async def test_fallback_single_object_wrapped_in_list(self, llm_service):
+        # LLM returns a plain object instead of an array
+        response_json = (
+            '{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}'
+        )
+        llm_service._call_llm = AsyncMock(return_value=response_json)
+
+        result = await llm_service.process_message("rotate page 1")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].operation == "rotate"
+        assert result[0].parameters.rotations == [(1, 90)]
+
+    async def test_fallback_multiline_json_objects(self, llm_service):
+        # LLM returns separated objects on new lines (the chained operation edge case)
+        response_json = (
+            '{"operation": "merge", "parameters": {}}\n'
+            '{"operation": "rotate", "parameters": {"rotations": [[2, 90]]}}'
+        )
+        llm_service._call_llm = AsyncMock(return_value=response_json)
+
+        result = await llm_service.process_message("merge and rotate")
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0].operation == "merge"
+        assert result[1].operation == "rotate"
+        assert result[1].parameters.rotations == [(2, 90)]
 
     async def test_retry_on_invalid_json_then_succeed(self, llm_service):
         llm_service._call_llm = AsyncMock(
             side_effect=[
                 "not valid json",
-                '{"operation": "merge", "parameters": {}}',
+                '[{"operation": "merge", "parameters": {}}]',
             ]
         )
 
         result = await llm_service.process_message("merge files")
 
-        assert result.operation == "merge"
+        assert len(result) == 1
+        assert result[0].operation == "merge"
         assert llm_service._call_llm.call_count == 2
 
     async def test_llm_error_object_raises_400(self, llm_service):
-        llm_service._call_llm = AsyncMock(return_value='{"error": "Cannot do that"}')
+        llm_service._call_llm = AsyncMock(return_value='[{"error": "Cannot do that"}]')
 
         with pytest.raises(HTTPException) as exc_info:
             await llm_service.process_message("do something impossible")

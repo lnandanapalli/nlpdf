@@ -74,12 +74,17 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
 
 
 def cleanup_files(*paths: Path) -> None:
-    """Delete temporary files, ignoring errors for already-deleted files."""
+    """Delete temporary files or directories, ignoring errors."""
+    import shutil
+
     for path in paths:
         try:
-            path.unlink(missing_ok=True)
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
         except OSError:
-            logger.warning("Failed to clean up temp file: %s", path)
+            logger.warning("Failed to clean up temp path: %s", path)
 
 
 def get_client_ip(request: Request) -> str:

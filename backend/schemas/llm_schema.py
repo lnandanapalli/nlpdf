@@ -78,3 +78,28 @@ def validate_llm_json(
         return model_class(**llm_output)  # type: ignore[return-value]
     except ValidationError as e:
         raise ValueError(f"Invalid parameters for '{operation}': {e}") from e
+
+
+def validate_llm_json_list(
+    llm_output: list[dict[str, Any]],
+) -> list[OperationType]:
+    """
+    Validate a list of LLM-generated operations.
+
+    Returns:
+        List of fully-typed operation models.
+
+    Raises:
+        ValueError: If any operation is invalid.
+    """
+    if not llm_output:
+        raise ValueError("Empty operations list")
+
+    operations: list[OperationType] = []
+    for i, item in enumerate(llm_output):
+        try:
+            operations.append(validate_llm_json(item))
+        except ValueError as e:
+            raise ValueError(f"Operation {i + 1}: {e}") from e
+
+    return operations
