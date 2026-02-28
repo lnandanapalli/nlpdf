@@ -35,9 +35,7 @@ async def update_user_otp(
 
 async def mark_user_verified(db: AsyncSession, user: User) -> None:
     """Mark a user as verified and clear the OTP fields."""
-    user.is_verified = (
-        True  # or 1 depending on dialect handling, but True works in SQLAlchemy
-    )
+    user.is_verified = True
     user.otp_code = None
     user.otp_expires_at = None
     await db.commit()

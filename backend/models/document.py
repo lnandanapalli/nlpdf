@@ -20,7 +20,7 @@ class Document(Base):
 
     # Metadata
     original_filename = Column(String, nullable=False)
-    operation_type = Column(String, nullable=False)  # compress, split, rotate
+    operation_type = Column(String, nullable=False)
 
     # File statistics
     input_size_mb = Column(String, nullable=True)

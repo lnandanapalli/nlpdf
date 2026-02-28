@@ -17,7 +17,6 @@ class User(Base):
     hashed_password = Column(String(256), nullable=False)
 
     # Verification columns
-    # Boolean as Integer 0/1 for SQLite compatibility or explicit Boolean
     is_verified = Column(Integer, default=False, nullable=False)
     otp_code = Column(String(6), nullable=True)
     otp_expires_at = Column(DateTime(timezone=True), nullable=True)
