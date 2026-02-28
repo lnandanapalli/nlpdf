@@ -1,6 +1,6 @@
 """Execute validated LLM operations using existing services."""
 
-import logging
+import structlog
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -17,7 +17,7 @@ from backend.services.merge_service import merge_pdfs
 from backend.services.rotate_service import rotate_pdf
 from backend.services.split_service import split_pdf
 
-logger = logging.getLogger("nlpdf.llm_executor")
+logger = structlog.get_logger(__name__)
 
 
 def execute_operation(

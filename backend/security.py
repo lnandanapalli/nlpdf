@@ -1,12 +1,12 @@
 """Security utilities and middleware for the NLPDF API."""
 
-import logging
+import structlog
 import tempfile
 from pathlib import Path
 
 from fastapi import HTTPException, Request, UploadFile
 
-logger = logging.getLogger("nlpdf.security")
+logger = structlog.get_logger(__name__)
 
 # --- Constants ---
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB per file

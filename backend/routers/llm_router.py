@@ -1,6 +1,6 @@
 """LLM-powered natural language PDF processing endpoint."""
 
-import logging
+import structlog
 import uuid
 from pathlib import Path
 
@@ -19,7 +19,7 @@ from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.operations_executor_service import execute_operation_chain
 
-logger = logging.getLogger("nlpdf.llm")
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/pdf", tags=["pdf"])
 

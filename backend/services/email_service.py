@@ -3,8 +3,11 @@
 from typing import cast
 
 import resend
+import structlog
 
 from backend.config import settings
+
+logger = structlog.get_logger(__name__)
 
 resend.api_key = settings.RESEND_API_KEY
 
@@ -30,5 +33,4 @@ def send_otp_email(to_email: str, otp_code: str) -> None:
     try:
         resend.Emails.send(params)
     except Exception as e:
-        # Log the error in a real production environment
-        print(f"Failed to send email to {to_email}: {e}")
+        logger.error("Failed to send email", to_email=to_email, error=str(e))

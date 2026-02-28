@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-import logging
+import structlog
 from typing import Any
 
 from fastapi import HTTPException
@@ -11,7 +11,7 @@ from huggingface_hub import AsyncInferenceClient
 from backend.config import SYSTEM_PROMPT, settings
 from backend.schemas.llm_schema import OperationType, validate_llm_json_list
 
-logger = logging.getLogger("nlpdf.llm")
+logger = structlog.get_logger(__name__)
 
 
 class LLMService:

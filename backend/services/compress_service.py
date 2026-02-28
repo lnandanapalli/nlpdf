@@ -1,14 +1,14 @@
 """PDF compression service using pikepdf and Pillow."""
 
 import io
-import logging
+import structlog
 from pathlib import Path
 
 import pikepdf
 from pikepdf import Stream
 from PIL import Image
 
-logger = logging.getLogger("nlpdf.compress")
+logger = structlog.get_logger(__name__)
 
 # Level -> scale factor (how much of original to keep)
 SCALE_FACTORS = {1: 0.6, 2: 0.4, 3: 0.2}
