@@ -7,12 +7,14 @@ from fastapi import HTTPException
 
 from backend.schemas.llm_schema import (
     CompressOperation,
+    MarkdownToPdfOperation,
     MergeOperation,
     OperationType,
     RotateOperation,
     SplitOperation,
 )
 from backend.services.compress_service import compress_pdf
+from backend.services.markdown_service import markdown_to_pdf
 from backend.services.merge_service import merge_pdfs
 from backend.services.rotate_service import rotate_pdf
 from backend.services.split_service import split_pdf
@@ -67,6 +69,11 @@ def execute_operation(
 
         if isinstance(operation, RotateOperation):
             return rotate_pdf(main_input, operation.parameters.rotations, output_path)
+
+        if isinstance(operation, MarkdownToPdfOperation):
+            return markdown_to_pdf(
+                main_input, output_path, operation.parameters.paper_size
+            )
 
     except HTTPException:
         raise

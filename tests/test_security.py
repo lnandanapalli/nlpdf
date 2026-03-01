@@ -8,8 +8,10 @@ from fastapi import HTTPException, UploadFile
 
 from backend.security import (
     MAX_FILE_SIZE_BYTES,
+    MAX_MARKDOWN_SIZE_BYTES,
     cleanup_files,
     get_client_ip,
+    validate_and_save_markdown,
     validate_and_save_pdf,
 )
 
@@ -58,6 +60,56 @@ class TestValidateAndSavePdf:
 
         with pytest.raises(HTTPException) as exc_info:
             await validate_and_save_pdf(upload, dest)
+
+        assert exc_info.value.status_code == 413
+        assert "exceeds maximum size" in exc_info.value.detail
+
+
+# ── validate_and_save_markdown ────────────────────────────────────────────────
+
+
+class TestValidateAndSaveMarkdown:
+    """Tests for validate_and_save_markdown."""
+
+    async def test_valid_markdown_saved(self, tmp_path):
+        dest = tmp_path / "saved.md"
+        content = b"# Hello\n\nSome **bold** text."
+        upload = UploadFile(file=io.BytesIO(content), filename="test.md")
+
+        await validate_and_save_markdown(upload, dest)
+
+        assert dest.exists()
+        assert dest.read_bytes() == content
+
+    async def test_empty_markdown_raises(self, tmp_path):
+        dest = tmp_path / "empty.md"
+        upload = UploadFile(file=io.BytesIO(b""), filename="empty.md")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_markdown(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "empty" in exc_info.value.detail.lower()
+
+    async def test_invalid_utf8_raises(self, tmp_path):
+        dest = tmp_path / "bad.md"
+        content = b"\xff\xfe invalid utf-8 \x80\x81"
+        upload = UploadFile(file=io.BytesIO(content), filename="bad.md")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_markdown(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "not valid UTF-8" in exc_info.value.detail
+        assert not dest.exists()
+
+    async def test_oversized_markdown_raises(self, tmp_path):
+        dest = tmp_path / "oversized.md"
+        content = b"x" * (MAX_MARKDOWN_SIZE_BYTES + 1)
+        upload = UploadFile(file=io.BytesIO(content), filename="big.md")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_markdown(upload, dest)
 
         assert exc_info.value.status_code == 413
         assert "exceeds maximum size" in exc_info.value.detail

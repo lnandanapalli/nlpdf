@@ -10,8 +10,10 @@ logger = structlog.get_logger(__name__)
 
 # --- Constants ---
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB per file
+MAX_MARKDOWN_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB per markdown file
 MAX_MERGE_FILES = 50
 PDF_MAGIC_BYTES = b"%PDF-"
+ALLOWED_EXTENSIONS = frozenset({".pdf", ".md"})
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "nlpdf_uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -56,6 +58,62 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
                     status_code=413,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
+                )
+                break
+
+            f.write(chunk)
+
+    if error is not None:
+        dest.unlink(missing_ok=True)
+        raise error
+
+    if total_size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail=f"File '{upload.filename}' is empty",
+        )
+
+
+async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
+    """
+    Validate an uploaded file is a valid markdown text file and save it.
+
+    Reads in chunks to enforce size limits without loading the entire file.
+    Validates that content is valid UTF-8 text.
+
+    Args:
+        upload: The uploaded file from FastAPI
+        dest: Destination path to save the file
+
+    Raises:
+        HTTPException: If the file is too large, not valid UTF-8, or empty
+    """
+    total_size = 0
+    chunk_size = 1024 * 1024  # 1 MB chunks
+    error: HTTPException | None = None
+
+    with open(dest, "wb") as f:
+        while True:
+            chunk = await upload.read(chunk_size)
+            if not chunk:
+                break
+
+            total_size += len(chunk)
+            if total_size > MAX_MARKDOWN_SIZE_BYTES:
+                error = HTTPException(
+                    status_code=413,
+                    detail=f"File '{upload.filename}' exceeds maximum size "
+                    f"of {MAX_MARKDOWN_SIZE_BYTES // (1024 * 1024)} MB",
+                )
+                break
+
+            try:
+                chunk.decode("utf-8")
+            except UnicodeDecodeError:
+                error = HTTPException(
+                    status_code=400,
+                    detail=f"File '{upload.filename}' is not valid UTF-8 text",
                 )
                 break
 

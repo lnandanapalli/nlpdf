@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.schemas.compress_schema import CompressParams
+from backend.schemas.markdown_schema import MarkdownToPdfParams
 from backend.schemas.rotate_schema import RotateParams
 from backend.schemas.split_schema import SplitParams
 
@@ -37,8 +38,21 @@ class MergeOperation(BaseModel):
     parameters: dict = Field(default_factory=dict)
 
 
+class MarkdownToPdfOperation(BaseModel):
+    """Markdown to PDF conversion operation from LLM."""
+
+    operation: Literal["markdown_to_pdf"]
+    parameters: MarkdownToPdfParams = Field(default_factory=MarkdownToPdfParams)
+
+
 # All allowed operation types
-OperationType = CompressOperation | SplitOperation | RotateOperation | MergeOperation
+OperationType = (
+    CompressOperation
+    | SplitOperation
+    | RotateOperation
+    | MergeOperation
+    | MarkdownToPdfOperation
+)
 
 # Maps operation name -> typed model
 OPERATION_MAP: dict[str, type[BaseModel]] = {
@@ -46,6 +60,7 @@ OPERATION_MAP: dict[str, type[BaseModel]] = {
     "split": SplitOperation,
     "rotate": RotateOperation,
     "merge": MergeOperation,
+    "markdown_to_pdf": MarkdownToPdfOperation,
 }
 
 ALLOWED_OPERATIONS = frozenset(OPERATION_MAP.keys())

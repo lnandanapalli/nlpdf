@@ -19,7 +19,7 @@ export default function DragDropZone({ files, onFilesAdded, onFileRemoved, disab
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: { 'application/pdf': ['.pdf'], 'text/markdown': ['.md'] },
     disabled,
   });
 
@@ -51,7 +51,7 @@ export default function DragDropZone({ files, onFilesAdded, onFileRemoved, disab
           style={{ marginBottom: 8 }}
         />
         <Typography variant="body1" color="text.primary" sx={{ fontWeight: 500 }}>
-          {isDragActive ? 'Drop PDFs here' : 'Drag & Drop PDFs or click to browse'}
+          {isDragActive ? 'Drop files here' : 'Drag & Drop PDFs or Markdown files'}
         </Typography>
       </Paper>
 

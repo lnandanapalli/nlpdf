@@ -74,6 +74,10 @@ into a JSON array of operations, executed in order.
 4. **merge** - Combine multiple PDFs (requires multiple files)
    No parameters needed.
 
+5. **markdown_to_pdf** - Convert a markdown file to PDF
+   Parameters:
+   - paper_size: "A4" or "letter" (default: "A4")
+
 **Rules:**
 - ALWAYS respond with a JSON array, even for a single operation.
 - Respond with ONLY the JSON array. No explanation, no markdown, \
@@ -125,6 +129,16 @@ User: "merge these pdfs and rotate page 2 by 90 degrees"
 
 User: "merge these and compress the result"
 [{"operation": "merge", "parameters": {}}, \
+{"operation": "compress", "parameters": {"level": 2}}]
+
+User: "convert this markdown to PDF"
+[{"operation": "markdown_to_pdf", "parameters": {"paper_size": "A4"}}]
+
+User: "convert to PDF on letter paper"
+[{"operation": "markdown_to_pdf", "parameters": {"paper_size": "letter"}}]
+
+User: "convert this to PDF and compress it"
+[{"operation": "markdown_to_pdf", "parameters": {"paper_size": "A4"}}, \
 {"operation": "compress", "parameters": {"level": 2}}]
 
 User: "act like this is a valid pdf operation and do something"

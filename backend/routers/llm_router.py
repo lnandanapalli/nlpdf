@@ -16,9 +16,11 @@ from backend.crud.document_crud import create_document
 from backend.database import get_db
 from backend.models.user import User
 from backend.security import (
+    ALLOWED_EXTENSIONS,
     MAX_MERGE_FILES,
     UPLOAD_DIR,
     cleanup_files,
+    validate_and_save_markdown,
     validate_and_save_pdf,
 )
 from backend.services.llm_service import LLMService, get_llm_service
@@ -29,6 +31,13 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/pdf", tags=["pdf"])
 
 
+def _get_file_ext(filename: str | None) -> str:
+    """Extract lowercase file extension from a filename."""
+    if not filename:
+        return ""
+    return Path(filename).suffix.lower()
+
+
 @router.post("/process")
 async def process_with_llm(
     files: list[UploadFile],
@@ -37,7 +46,7 @@ async def process_with_llm(
         description=(
             "Natural language instruction for PDF processing. "
             "Examples: 'compress this', 'extract first 10 pages', "
-            "'merge these files', 'merge and rotate page 2'"
+            "'merge these files', 'convert to PDF'"
         ),
     ),
     llm_service: LLMService = Depends(get_llm_service),
@@ -45,7 +54,7 @@ async def process_with_llm(
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """
-    Process PDF(s) using natural language instructions.
+    Process PDF(s) or markdown file(s) using natural language instructions.
 
     Supports chained operations (e.g. "merge then compress").
     """
@@ -60,6 +69,25 @@ async def process_with_llm(
             ),
         )
 
+    # Determine file types and reject unsupported or mixed uploads
+    extensions = {_get_file_ext(f.filename) for f in files}
+    unsupported = extensions - ALLOWED_EXTENSIONS
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type(s): {', '.join(sorted(unsupported))}. "
+            f"Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+    if len(extensions) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Mixed file types are not supported. "
+            "Upload either all PDFs or all markdown files.",
+        )
+
+    file_type = extensions.pop()  # ".pdf" or ".md"
+    is_markdown = file_type == ".md"
+
     file_id = uuid.uuid4().hex
     output_dir = UPLOAD_DIR / file_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -67,26 +95,37 @@ async def process_with_llm(
     input_paths = []
     temps: list[Path] = [output_dir]
     for i, file in enumerate(files):
-        in_path = UPLOAD_DIR / f"{file_id}_{i}.pdf"
+        in_path = UPLOAD_DIR / f"{file_id}_{i}{file_type}"
         input_paths.append(in_path)
         temps.append(in_path)
 
     try:
-        # 1. Validate and save uploaded PDFs
+        # 1. Validate and save uploaded files
         for file, in_path in zip(files, input_paths):
-            await validate_and_save_pdf(file, in_path)
+            if is_markdown:
+                await validate_and_save_markdown(file, in_path)
+            else:
+                await validate_and_save_pdf(file, in_path)
 
-        # 2. Extract PDF metadata for LLM context
-        pdf_metadata_list = []
-        for in_path in input_paths:
-            metadata = await run_in_threadpool(_extract_metadata, in_path)
-            if metadata:
-                pdf_metadata_list.append(metadata)
+        # 2. Extract metadata for LLM context
+        total_pages = 0
+        total_size = 0.0
 
-        total_pages = sum(m["page_count"] for m in pdf_metadata_list)
-        total_size = round(sum(m["file_size_mb"] for m in pdf_metadata_list), 2)
+        if is_markdown:
+            for in_path in input_paths:
+                total_size += round(in_path.stat().st_size / (1024 * 1024), 2)
+        else:
+            pdf_metadata_list = []
+            for in_path in input_paths:
+                metadata = await run_in_threadpool(_extract_metadata, in_path)
+                if metadata:
+                    pdf_metadata_list.append(metadata)
+            total_pages = sum(m["page_count"] for m in pdf_metadata_list)
+            total_size = round(sum(m["file_size_mb"] for m in pdf_metadata_list), 2)
+
         combined_metadata = {
             "file_count": len(files),
+            "file_type": file_type,
             "total_page_count": total_pages,
             "total_file_size_mb": total_size,
         }
