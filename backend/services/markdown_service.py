@@ -17,7 +17,7 @@ body {
     font-size: 12px;
     line-height: 1.6;
     color: #222;
-    margin: 40px;
+    margin: 0;
 }
 h1 { font-size: 24px; margin-top: 24px; margin-bottom: 12px; }
 h2 { font-size: 20px; margin-top: 20px; margin-bottom: 10px; }
