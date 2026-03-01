@@ -6,11 +6,13 @@ from pathlib import Path
 import mammoth
 from xhtml2pdf import pisa
 
+from backend.services.pdf_fonts import register_fonts
+
 logger = structlog.get_logger(__name__)
 
 CSS = """\
 body {
-    font-family: Helvetica, Arial, sans-serif;
+    font-family: DejaVuSans, Helvetica, Arial, sans-serif;
     font-size: 12px;
     line-height: 1.6;
     color: #222;
@@ -64,6 +66,8 @@ def word_to_pdf(input_path: Path, output_path: Path, paper_size: str = "A4") -> 
     Raises:
         ValueError: If the DOCX file cannot be read or converted.
     """
+    register_fonts()
+
     with open(input_path, "rb") as f:
         result = mammoth.convert_to_html(f)
 

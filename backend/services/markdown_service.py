@@ -7,11 +7,13 @@ from xhtml2pdf import pisa
 
 import markdown
 
+from backend.services.pdf_fonts import register_fonts
+
 logger = structlog.get_logger(__name__)
 
 CSS = """\
 body {
-    font-family: Helvetica, Arial, sans-serif;
+    font-family: DejaVuSans, Helvetica, Arial, sans-serif;
     font-size: 12px;
     line-height: 1.6;
     color: #222;
@@ -23,7 +25,7 @@ h3 { font-size: 16px; margin-top: 16px; margin-bottom: 8px; }
 h4, h5, h6 { font-size: 14px; margin-top: 14px; margin-bottom: 6px; }
 p { margin: 8px 0; }
 code {
-    font-family: Courier, monospace;
+    font-family: DejaVuSansMono, Courier, monospace;
     font-size: 11px;
     background-color: #f4f4f4;
     padding: 2px 4px;
@@ -32,7 +34,7 @@ pre {
     background-color: #f4f4f4;
     padding: 12px;
     margin: 12px 0;
-    font-family: Courier, monospace;
+    font-family: DejaVuSansMono, Courier, monospace;
     font-size: 11px;
     line-height: 1.4;
 }
@@ -85,6 +87,8 @@ def markdown_to_pdf(
     Raises:
         ValueError: If the markdown file cannot be read or converted.
     """
+    register_fonts()
+
     md_text = input_path.read_text(encoding="utf-8")
 
     html_body = markdown.markdown(

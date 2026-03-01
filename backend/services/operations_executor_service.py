@@ -94,11 +94,11 @@ def execute_operation(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Operation %s failed", operation.operation)
         raise HTTPException(
             status_code=500,
-            detail=f"PDF operation failed: {e}",
+            detail="Something went wrong while processing your file. Please try again.",
         )
 
     raise HTTPException(status_code=400, detail="Unknown operation")

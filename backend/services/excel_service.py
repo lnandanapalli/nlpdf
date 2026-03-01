@@ -7,11 +7,13 @@ from pathlib import Path
 from openpyxl import load_workbook
 from xhtml2pdf import pisa
 
+from backend.services.pdf_fonts import register_fonts
+
 logger = structlog.get_logger(__name__)
 
 CSS = """\
 body {
-    font-family: Helvetica, Arial, sans-serif;
+    font-family: DejaVuSans, Helvetica, Arial, sans-serif;
     font-size: 11px;
     line-height: 1.4;
     color: #222;
@@ -93,6 +95,8 @@ def excel_to_pdf(input_path: Path, output_path: Path, paper_size: str = "A4") ->
     Raises:
         ValueError: If the XLSX file cannot be read or converted.
     """
+    register_fonts()
+
     wb = load_workbook(str(input_path), read_only=True, data_only=True)
 
     sheets_html = []

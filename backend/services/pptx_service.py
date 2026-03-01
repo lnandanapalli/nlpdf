@@ -7,11 +7,13 @@ from pptx import Presentation
 from pptx.util import Emu
 from xhtml2pdf import pisa
 
+from backend.services.pdf_fonts import register_fonts
+
 logger = structlog.get_logger(__name__)
 
 CSS = """\
 body {
-    font-family: Helvetica, Arial, sans-serif;
+    font-family: DejaVuSans, Helvetica, Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
     color: #222;
@@ -128,6 +130,8 @@ def pptx_to_pdf(input_path: Path, output_path: Path, paper_size: str = "A4") -> 
     Raises:
         ValueError: If the PPTX file cannot be read or converted.
     """
+    register_fonts()
+
     prs = Presentation(str(input_path))
 
     slides_html = []

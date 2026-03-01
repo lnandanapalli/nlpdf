@@ -193,10 +193,14 @@ async def process_with_llm(
     except HTTPException:
         cleanup_files(*temps)
         raise
-    except Exception as e:
+    except Exception:
         cleanup_files(*temps)
         logger.exception("Processing failed")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while processing your "
+            "request. Please try again.",
+        )
 
 
 def _extract_metadata(input_path: Path) -> dict | None:
