@@ -13,7 +13,7 @@ logger = structlog.get_logger(__name__)
 
 CSS = """\
 body {
-    font-family: DejaVuSans, Helvetica, Arial, sans-serif;
+    font-family: DejaVuSans;
     font-size: 12px;
     line-height: 1.6;
     color: #222;
@@ -25,7 +25,7 @@ h3 { font-size: 16px; margin-top: 16px; margin-bottom: 8px; }
 h4, h5, h6 { font-size: 14px; margin-top: 14px; margin-bottom: 6px; }
 p { margin: 8px 0; }
 code {
-    font-family: DejaVuSansMono, Courier, monospace;
+    font-family: DejaVuSansMono;
     font-size: 11px;
     background-color: #f4f4f4;
     padding: 2px 4px;
@@ -34,7 +34,7 @@ pre {
     background-color: #f4f4f4;
     padding: 12px;
     margin: 12px 0;
-    font-family: DejaVuSansMono, Courier, monospace;
+    font-family: DejaVuSansMono;
     font-size: 11px;
     line-height: 1.4;
 }

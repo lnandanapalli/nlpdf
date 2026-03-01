@@ -1,9 +1,4 @@
-"""Register DejaVu Sans fonts for xhtml2pdf Unicode support.
-
-xhtml2pdf's default Type 1 fonts (Helvetica, Courier) only cover basic Latin
-characters. DejaVu Sans is bundled to provide full Unicode support including
-subscripts, superscripts, and other extended characters.
-"""
+"""Register DejaVu Sans fonts for xhtml2pdf Unicode support."""
 
 from pathlib import Path
 
@@ -63,32 +58,5 @@ def register_fonts() -> None:
     font_map["dejavusans-boldoblique"] = "DejaVuSans-BoldOblique"
     font_map["dejavusansmono"] = "DejaVuSansMono"
     font_map["dejavusansmono-bold"] = "DejaVuSansMono-Bold"
-
-    # Override common CSS font names to use DejaVu instead of Type 1 fonts
-    for name in (
-        "helvetica",
-        "arial",
-        "verdana",
-        "geneva",
-        "sansserif",
-        "sans",
-        "sans-serif",
-    ):
-        font_map[name] = "DejaVuSans"
-    for name in (
-        "helvetica-bold",
-        "arial-bold",
-    ):
-        font_map[name] = "DejaVuSans-Bold"
-    for name in (
-        "helvetica-oblique",
-        "helvetica-boldoblique",
-    ):
-        font_map[name] = "DejaVuSans-Oblique"
-
-    for name in ("courier", "courier new", "monospace", "monospaced", "mono"):
-        font_map[name] = "DejaVuSansMono"
-    for name in ("courier-bold",):
-        font_map[name] = "DejaVuSansMono-Bold"
 
     _registered = True
