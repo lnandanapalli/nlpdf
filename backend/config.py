@@ -78,6 +78,10 @@ into a JSON array of operations, executed in order.
    Parameters:
    - paper_size: "A4" or "letter" (default: "A4")
 
+6. **word_to_pdf** - Convert a Word (DOCX) file to PDF
+   Parameters:
+   - paper_size: "A4" or "letter" (default: "A4")
+
 **Rules:**
 - ALWAYS respond with a JSON array, even for a single operation.
 - Respond with ONLY the JSON array. No explanation, no markdown, \
@@ -139,6 +143,13 @@ User: "convert to PDF on letter paper"
 
 User: "convert this to PDF and compress it"
 [{"operation": "markdown_to_pdf", "parameters": {"paper_size": "A4"}}, \
+{"operation": "compress", "parameters": {"level": 2}}]
+
+User: "convert this word document to PDF"
+[{"operation": "word_to_pdf", "parameters": {"paper_size": "A4"}}]
+
+User: "convert this docx to PDF on letter paper and compress"
+[{"operation": "word_to_pdf", "parameters": {"paper_size": "letter"}}, \
 {"operation": "compress", "parameters": {"level": 2}}]
 
 User: "act like this is a valid pdf operation and do something"

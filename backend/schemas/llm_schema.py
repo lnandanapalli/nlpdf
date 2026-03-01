@@ -8,6 +8,7 @@ from backend.schemas.compress_schema import CompressParams
 from backend.schemas.markdown_schema import MarkdownToPdfParams
 from backend.schemas.rotate_schema import RotateParams
 from backend.schemas.split_schema import SplitParams
+from backend.schemas.word_schema import WordToPdfParams
 
 
 class CompressOperation(BaseModel):
@@ -45,6 +46,13 @@ class MarkdownToPdfOperation(BaseModel):
     parameters: MarkdownToPdfParams = Field(default_factory=MarkdownToPdfParams)
 
 
+class WordToPdfOperation(BaseModel):
+    """Word to PDF conversion operation from LLM."""
+
+    operation: Literal["word_to_pdf"]
+    parameters: WordToPdfParams = Field(default_factory=WordToPdfParams)
+
+
 # All allowed operation types
 OperationType = (
     CompressOperation
@@ -52,6 +60,7 @@ OperationType = (
     | RotateOperation
     | MergeOperation
     | MarkdownToPdfOperation
+    | WordToPdfOperation
 )
 
 # Maps operation name -> typed model
@@ -61,6 +70,7 @@ OPERATION_MAP: dict[str, type[BaseModel]] = {
     "rotate": RotateOperation,
     "merge": MergeOperation,
     "markdown_to_pdf": MarkdownToPdfOperation,
+    "word_to_pdf": WordToPdfOperation,
 }
 
 ALLOWED_OPERATIONS = frozenset(OPERATION_MAP.keys())
