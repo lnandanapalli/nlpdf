@@ -7,16 +7,20 @@ from fastapi import HTTPException
 
 from backend.schemas.llm_schema import (
     CompressOperation,
+    ExcelToPdfOperation,
     MarkdownToPdfOperation,
     MergeOperation,
     OperationType,
+    PptxToPdfOperation,
     RotateOperation,
     SplitOperation,
     WordToPdfOperation,
 )
 from backend.services.compress_service import compress_pdf
+from backend.services.excel_service import excel_to_pdf
 from backend.services.markdown_service import markdown_to_pdf
 from backend.services.merge_service import merge_pdfs
+from backend.services.pptx_service import pptx_to_pdf
 from backend.services.rotate_service import rotate_pdf
 from backend.services.split_service import split_pdf
 from backend.services.word_service import word_to_pdf
@@ -79,6 +83,14 @@ def execute_operation(
 
         if isinstance(operation, WordToPdfOperation):
             return word_to_pdf(main_input, output_path, operation.parameters.paper_size)
+
+        if isinstance(operation, PptxToPdfOperation):
+            return pptx_to_pdf(main_input, output_path, operation.parameters.paper_size)
+
+        if isinstance(operation, ExcelToPdfOperation):
+            return excel_to_pdf(
+                main_input, output_path, operation.parameters.paper_size
+            )
 
     except HTTPException:
         raise

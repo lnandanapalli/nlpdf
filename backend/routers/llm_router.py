@@ -23,6 +23,8 @@ from backend.security import (
     validate_and_save_docx,
     validate_and_save_markdown,
     validate_and_save_pdf,
+    validate_and_save_pptx,
+    validate_and_save_xlsx,
 )
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.operations_executor_service import execute_operation_chain
@@ -86,9 +88,11 @@ async def process_with_llm(
             "Upload all files of the same type.",
         )
 
-    file_type = extensions.pop()  # ".pdf", ".md", or ".docx"
+    file_type = extensions.pop()
     is_markdown = file_type == ".md"
     is_docx = file_type == ".docx"
+    is_pptx = file_type == ".pptx"
+    is_xlsx = file_type == ".xlsx"
 
     file_id = uuid.uuid4().hex
     output_dir = UPLOAD_DIR / file_id
@@ -108,6 +112,10 @@ async def process_with_llm(
                 await validate_and_save_markdown(file, in_path)
             elif is_docx:
                 await validate_and_save_docx(file, in_path)
+            elif is_pptx:
+                await validate_and_save_pptx(file, in_path)
+            elif is_xlsx:
+                await validate_and_save_xlsx(file, in_path)
             else:
                 await validate_and_save_pdf(file, in_path)
 
@@ -115,7 +123,7 @@ async def process_with_llm(
         total_pages = 0
         total_size = 0.0
 
-        if is_markdown or is_docx:
+        if is_markdown or is_docx or is_pptx or is_xlsx:
             for in_path in input_paths:
                 total_size += round(in_path.stat().st_size / (1024 * 1024), 2)
         else:

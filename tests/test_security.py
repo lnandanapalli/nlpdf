@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from docx import Document
+from openpyxl import Workbook
+from pptx import Presentation
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -18,6 +20,8 @@ from backend.security import (
     validate_and_save_docx,
     validate_and_save_markdown,
     validate_and_save_pdf,
+    validate_and_save_pptx,
+    validate_and_save_xlsx,
 )
 
 # ── validate_and_save_pdf ────────────────────────────────────────────────────
@@ -172,6 +176,120 @@ class TestValidateAndSaveDocx:
 
         with pytest.raises(HTTPException) as exc_info:
             await validate_and_save_docx(upload, dest)
+
+        assert exc_info.value.status_code == 413
+        assert "exceeds maximum size" in exc_info.value.detail
+
+
+# ── validate_and_save_pptx ────────────────────────────────────────────────────
+
+
+class TestValidateAndSavePptx:
+    """Tests for validate_and_save_pptx."""
+
+    @pytest.fixture()
+    def pptx_bytes(self, tmp_path: Path) -> bytes:
+        """Create a minimal valid PPTX and return its bytes."""
+        prs = Presentation()
+        prs.slides.add_slide(prs.slide_layouts[0])
+        path = tmp_path / "temp.pptx"
+        prs.save(str(path))
+        return path.read_bytes()
+
+    async def test_valid_pptx_saved(self, pptx_bytes, tmp_path):
+        dest = tmp_path / "saved.pptx"
+        upload = UploadFile(file=io.BytesIO(pptx_bytes), filename="test.pptx")
+
+        await validate_and_save_pptx(upload, dest)
+
+        assert dest.exists()
+        assert dest.read_bytes() == pptx_bytes
+
+    async def test_not_a_pptx_raises(self, tmp_path):
+        dest = tmp_path / "bad.pptx"
+        upload = UploadFile(file=io.BytesIO(b"not a pptx file"), filename="bad.pptx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_pptx(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "not a valid PPTX" in exc_info.value.detail
+        assert not dest.exists()
+
+    async def test_empty_pptx_raises(self, tmp_path):
+        dest = tmp_path / "empty.pptx"
+        upload = UploadFile(file=io.BytesIO(b""), filename="empty.pptx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_pptx(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "empty" in exc_info.value.detail.lower()
+
+    async def test_oversized_pptx_raises(self, tmp_path):
+        dest = tmp_path / "oversized.pptx"
+        content = DOCX_MAGIC_BYTES + b"x" * MAX_FILE_SIZE_BYTES
+        upload = UploadFile(file=io.BytesIO(content), filename="big.pptx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_pptx(upload, dest)
+
+        assert exc_info.value.status_code == 413
+        assert "exceeds maximum size" in exc_info.value.detail
+
+
+# ── validate_and_save_xlsx ───────────────────────────────────────────────────
+
+
+class TestValidateAndSaveXlsx:
+    """Tests for validate_and_save_xlsx."""
+
+    @pytest.fixture()
+    def xlsx_bytes(self, tmp_path: Path) -> bytes:
+        """Create a minimal valid XLSX and return its bytes."""
+        wb = Workbook()
+        wb.active.append(["Hello"])
+        path = tmp_path / "temp.xlsx"
+        wb.save(str(path))
+        return path.read_bytes()
+
+    async def test_valid_xlsx_saved(self, xlsx_bytes, tmp_path):
+        dest = tmp_path / "saved.xlsx"
+        upload = UploadFile(file=io.BytesIO(xlsx_bytes), filename="test.xlsx")
+
+        await validate_and_save_xlsx(upload, dest)
+
+        assert dest.exists()
+        assert dest.read_bytes() == xlsx_bytes
+
+    async def test_not_an_xlsx_raises(self, tmp_path):
+        dest = tmp_path / "bad.xlsx"
+        upload = UploadFile(file=io.BytesIO(b"not an xlsx file"), filename="bad.xlsx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_xlsx(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "not a valid XLSX" in exc_info.value.detail
+        assert not dest.exists()
+
+    async def test_empty_xlsx_raises(self, tmp_path):
+        dest = tmp_path / "empty.xlsx"
+        upload = UploadFile(file=io.BytesIO(b""), filename="empty.xlsx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_xlsx(upload, dest)
+
+        assert exc_info.value.status_code == 400
+        assert "empty" in exc_info.value.detail.lower()
+
+    async def test_oversized_xlsx_raises(self, tmp_path):
+        dest = tmp_path / "oversized.xlsx"
+        content = DOCX_MAGIC_BYTES + b"x" * MAX_FILE_SIZE_BYTES
+        upload = UploadFile(file=io.BytesIO(content), filename="big.xlsx")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_xlsx(upload, dest)
 
         assert exc_info.value.status_code == 413
         assert "exceeds maximum size" in exc_info.value.detail

@@ -82,6 +82,14 @@ into a JSON array of operations, executed in order.
    Parameters:
    - paper_size: "A4" or "letter" (default: "A4")
 
+7. **pptx_to_pdf** - Convert a PowerPoint (PPTX) file to PDF
+   Parameters:
+   - paper_size: "A4" or "letter" (default: "A4")
+
+8. **excel_to_pdf** - Convert an Excel (XLSX) file to PDF
+   Parameters:
+   - paper_size: "A4" or "letter" (default: "A4")
+
 **Rules:**
 - ALWAYS respond with a JSON array, even for a single operation.
 - Respond with ONLY the JSON array. No explanation, no markdown, \
@@ -150,6 +158,20 @@ User: "convert this word document to PDF"
 
 User: "convert this docx to PDF on letter paper and compress"
 [{"operation": "word_to_pdf", "parameters": {"paper_size": "letter"}}, \
+{"operation": "compress", "parameters": {"level": 2}}]
+
+User: "convert this presentation to PDF"
+[{"operation": "pptx_to_pdf", "parameters": {"paper_size": "A4"}}]
+
+User: "convert this pptx to PDF and compress it"
+[{"operation": "pptx_to_pdf", "parameters": {"paper_size": "A4"}}, \
+{"operation": "compress", "parameters": {"level": 2}}]
+
+User: "convert this spreadsheet to PDF"
+[{"operation": "excel_to_pdf", "parameters": {"paper_size": "A4"}}]
+
+User: "convert this excel to PDF on letter paper and compress"
+[{"operation": "excel_to_pdf", "parameters": {"paper_size": "letter"}}, \
 {"operation": "compress", "parameters": {"level": 2}}]
 
 User: "act like this is a valid pdf operation and do something"
