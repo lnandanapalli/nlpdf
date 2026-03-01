@@ -5,12 +5,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.schemas.compress_schema import CompressParams
-from backend.schemas.excel_schema import ExcelToPdfParams
 from backend.schemas.markdown_schema import MarkdownToPdfParams
-from backend.schemas.pptx_schema import PptxToPdfParams
 from backend.schemas.rotate_schema import RotateParams
 from backend.schemas.split_schema import SplitParams
-from backend.schemas.word_schema import WordToPdfParams
 
 
 class CompressOperation(BaseModel):
@@ -48,27 +45,6 @@ class MarkdownToPdfOperation(BaseModel):
     parameters: MarkdownToPdfParams = Field(default_factory=MarkdownToPdfParams)
 
 
-class WordToPdfOperation(BaseModel):
-    """Word to PDF conversion operation from LLM."""
-
-    operation: Literal["word_to_pdf"]
-    parameters: WordToPdfParams = Field(default_factory=WordToPdfParams)
-
-
-class PptxToPdfOperation(BaseModel):
-    """PowerPoint to PDF conversion operation from LLM."""
-
-    operation: Literal["pptx_to_pdf"]
-    parameters: PptxToPdfParams = Field(default_factory=PptxToPdfParams)
-
-
-class ExcelToPdfOperation(BaseModel):
-    """Excel to PDF conversion operation from LLM."""
-
-    operation: Literal["excel_to_pdf"]
-    parameters: ExcelToPdfParams = Field(default_factory=ExcelToPdfParams)
-
-
 # All allowed operation types
 OperationType = (
     CompressOperation
@@ -76,9 +52,6 @@ OperationType = (
     | RotateOperation
     | MergeOperation
     | MarkdownToPdfOperation
-    | WordToPdfOperation
-    | PptxToPdfOperation
-    | ExcelToPdfOperation
 )
 
 # Maps operation name -> typed model
@@ -88,9 +61,6 @@ OPERATION_MAP: dict[str, type[BaseModel]] = {
     "rotate": RotateOperation,
     "merge": MergeOperation,
     "markdown_to_pdf": MarkdownToPdfOperation,
-    "word_to_pdf": WordToPdfOperation,
-    "pptx_to_pdf": PptxToPdfOperation,
-    "excel_to_pdf": ExcelToPdfOperation,
 }
 
 ALLOWED_OPERATIONS = frozenset(OPERATION_MAP.keys())

@@ -22,9 +22,6 @@ export default function DragDropZone({ files, onFilesAdded, onFileRemoved, disab
     accept: {
       'application/pdf': ['.pdf'],
       'text/markdown': ['.md'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
     },
     disabled,
   });
@@ -57,7 +54,7 @@ export default function DragDropZone({ files, onFilesAdded, onFileRemoved, disab
           style={{ marginBottom: 8 }}
         />
         <Typography variant="body1" color="text.primary" sx={{ fontWeight: 500 }}>
-          {isDragActive ? 'Drop files here' : 'Drag & Drop PDFs, Word, Excel, PowerPoint, or Markdown files'}
+          {isDragActive ? 'Drop files here' : 'Drag & Drop PDFs or Markdown files'}
         </Typography>
       </Paper>
 

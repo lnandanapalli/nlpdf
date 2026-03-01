@@ -20,11 +20,8 @@ from backend.security import (
     MAX_MERGE_FILES,
     UPLOAD_DIR,
     cleanup_files,
-    validate_and_save_docx,
     validate_and_save_markdown,
     validate_and_save_pdf,
-    validate_and_save_pptx,
-    validate_and_save_xlsx,
 )
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.operations_executor_service import execute_operation_chain
@@ -57,7 +54,7 @@ async def process_with_llm(
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """
-    Process PDF(s), markdown, or Word file(s) using natural language instructions.
+    Process PDF(s) or markdown file(s) using natural language instructions.
 
     Supports chained operations (e.g. "merge then compress").
     """
@@ -90,9 +87,6 @@ async def process_with_llm(
 
     file_type = extensions.pop()
     is_markdown = file_type == ".md"
-    is_docx = file_type == ".docx"
-    is_pptx = file_type == ".pptx"
-    is_xlsx = file_type == ".xlsx"
 
     file_id = uuid.uuid4().hex
     output_dir = UPLOAD_DIR / file_id
@@ -110,12 +104,6 @@ async def process_with_llm(
         for file, in_path in zip(files, input_paths):
             if is_markdown:
                 await validate_and_save_markdown(file, in_path)
-            elif is_docx:
-                await validate_and_save_docx(file, in_path)
-            elif is_pptx:
-                await validate_and_save_pptx(file, in_path)
-            elif is_xlsx:
-                await validate_and_save_xlsx(file, in_path)
             else:
                 await validate_and_save_pdf(file, in_path)
 
@@ -123,7 +111,7 @@ async def process_with_llm(
         total_pages = 0
         total_size = 0.0
 
-        if is_markdown or is_docx or is_pptx or is_xlsx:
+        if is_markdown:
             for in_path in input_paths:
                 total_size += round(in_path.stat().st_size / (1024 * 1024), 2)
         else:
