@@ -7,7 +7,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
-from backend.auth.jwt import create_access_token
+from backend.auth.jwt import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+)
 from backend.auth.password import hash_password, verify_password
 from backend.crud.user_crud import (
     create_user,
@@ -19,6 +23,7 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.schemas.auth_schema import (
     LoginRequest,
+    RefreshRequest,
     ResendOTPRequest,
     SignupRequest,
     SuccessResponse,
@@ -121,7 +126,8 @@ async def verify_otp(
 
     await mark_user_verified(db, user)
     token = create_access_token({"sub": user.email})
-    return TokenResponse(access_token=token)
+    refresh = create_refresh_token({"sub": user.email})
+    return TokenResponse(access_token=token, refresh_token=refresh)
 
 
 @router.post("/resend_otp", response_model=SuccessResponse)
@@ -179,7 +185,39 @@ async def login(
         )
 
     token = create_access_token({"sub": user.email})
-    return TokenResponse(access_token=token)
+    refresh = create_refresh_token({"sub": user.email})
+    return TokenResponse(access_token=token, refresh_token=refresh)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(
+    body: RefreshRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
+    """Exchange a valid refresh token for a new token pair."""
+    try:
+        payload = decode_refresh_token(body.refresh_token)
+        email: str | None = payload.get("sub")
+        if email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+            )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    user = await get_user_by_email(db, email)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    new_access = create_access_token({"sub": email})
+    new_refresh = create_refresh_token({"sub": email})
+    return TokenResponse(access_token=new_access, refresh_token=new_refresh)
 
 
 @router.get("/me", response_model=UserResponse)

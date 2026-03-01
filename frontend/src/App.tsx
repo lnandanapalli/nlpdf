@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   Container, Typography, Box, Alert, Slide,
@@ -11,7 +11,7 @@ import CommandInput from './components/CommandInput';
 import ProcessingState from './components/ProcessingState';
 import ResultCard from './components/ResultCard';
 import AuthScreen from './components/AuthScreen';
-import { processPDFs, API_BASE_URL } from './services/api';
+import { processPDFs, validateSession, API_BASE_URL } from './services/api';
 
 type AppState = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
@@ -22,24 +22,12 @@ function App() {
   const [resultFilename, setResultFilename] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(!!token);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(
+    !!localStorage.getItem('token'),
+  );
 
   const theme = useTheme();
-
-  // Validate stored token on mount
-  useEffect(() => {
-    if (!token) return;
-    axios
-      .get(`${API_BASE_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(() => setIsAuthenticated(true))
-      .catch(() => {
-        localStorage.removeItem('token');
-        setToken(null);
-      })
-      .finally(() => setIsCheckingAuth(false));
-  }, [token]);
 
   const handleReset = () => {
     setAppState('IDLE');
@@ -49,13 +37,58 @@ function App() {
     setErrorMessage('');
   };
 
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    setIsAuthenticated(false);
+    handleReset();
+  }, []);
+
+  // Validate stored token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setIsCheckingAuth(false);
+      return;
+    }
+    validateSession()
+      .then((valid) => {
+        if (valid) {
+          setIsAuthenticated(true);
+        } else {
+          handleLogout();
+        }
+      })
+      .finally(() => setIsCheckingAuth(false));
+  }, [handleLogout]);
+
+  // Listen for session-expired events from the axios interceptor
+  useEffect(() => {
+    const onExpired = () => handleLogout();
+    window.addEventListener('session-expired', onExpired);
+    return () => window.removeEventListener('session-expired', onExpired);
+  }, [handleLogout]);
+
+  // Proactive session guard: re-validate when user returns to the tab
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAuthenticated) {
+        validateSession().then((valid) => {
+          if (!valid) handleLogout();
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [isAuthenticated, handleLogout]);
+
   const handleProcess = async (command: string) => {
     if (files.length === 0) return;
     setAppState('PROCESSING');
     setErrorMessage('');
 
     try {
-      const { blob, filename } = await processPDFs(files, command, token!);
+      const { blob, filename } = await processPDFs(files, command);
       setResultBlob(blob);
       setResultFilename(filename);
       setAppState('SUCCESS');
@@ -81,17 +114,12 @@ function App() {
     }
   };
 
-  const handleLogin = (newToken: string) => {
+  const handleLogin = (newToken: string, refreshToken?: string) => {
     localStorage.setItem('token', newToken);
-    setToken(newToken);
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
     setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setIsAuthenticated(false);
-    handleReset();
   };
 
   if (isCheckingAuth) {

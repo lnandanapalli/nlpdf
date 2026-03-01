@@ -74,8 +74,8 @@ async def client():
         yield ac
 
 
-async def _create_verified_user_and_get_token(client, email, password):
-    """Helper to signup, retrieve the OTP from DB, verify it, and return the token."""
+async def _create_verified_user_and_get_tokens(client, email, password):
+    """Helper: signup, verify OTP, return (access_token, refresh_token)."""
     # 1. Signup
     await client.post(
         "/auth/signup",
@@ -93,7 +93,8 @@ async def _create_verified_user_and_get_token(client, email, password):
     resp = await client.post(
         "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
     )
-    return resp.json()["access_token"]
+    data = resp.json()
+    return data["access_token"], data["refresh_token"]
 
 
 class TestSignup:
@@ -115,7 +116,7 @@ class TestSignup:
 
     async def test_signup_duplicate_email_returns_409_if_verified(self, client):
         payload = {"email": "dupe@example.com", "password": "securepass123"}
-        await _create_verified_user_and_get_token(
+        await _create_verified_user_and_get_tokens(
             client, payload["email"], payload["password"]
         )
 
@@ -156,7 +157,9 @@ class TestOTP:
             "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
         )
         assert resp.status_code == 200
-        assert "access_token" in resp.json()
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
 
     async def test_verify_otp_invalid_code(self, client):
         email = "badotp@example.com"
@@ -186,12 +189,10 @@ class TestLogin:
     """Tests for POST /auth/login."""
 
     async def test_login_success(self, client):
-        # Create and verify user
-        await _create_verified_user_and_get_token(
+        await _create_verified_user_and_get_tokens(
             client, "login@example.com", "securepass123"
         )
 
-        # Then login
         resp = await client.post(
             "/auth/login",
             json={
@@ -201,10 +202,11 @@ class TestLogin:
             },
         )
         assert resp.status_code == 200
-        assert "access_token" in resp.json()
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
 
     async def test_login_unverified_user_returns_403(self, client):
-        # Signup but DO NOT verify
         await client.post(
             "/auth/signup",
             json={
@@ -226,7 +228,7 @@ class TestLogin:
         assert "Unverified" in resp.json()["detail"]
 
     async def test_login_wrong_password_returns_401(self, client):
-        await _create_verified_user_and_get_token(
+        await _create_verified_user_and_get_tokens(
             client, "wrong@example.com", "securepass123"
         )
 
@@ -245,7 +247,7 @@ class TestMe:
     """Tests for GET /auth/me."""
 
     async def test_me_returns_user(self, client):
-        token = await _create_verified_user_and_get_token(
+        token, _ = await _create_verified_user_and_get_tokens(
             client, "me@example.com", "securepass123"
         )
 
@@ -259,4 +261,63 @@ class TestMe:
 
     async def test_me_without_token_returns_401(self, client):
         resp = await client.get("/auth/me")
+        assert resp.status_code == 401
+
+
+class TestRefresh:
+    """Tests for POST /auth/refresh."""
+
+    async def test_refresh_returns_new_token_pair(self, client):
+        _, refresh_token = await _create_verified_user_and_get_tokens(
+            client, "refresh@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+
+    async def test_refresh_with_invalid_token_returns_401(self, client):
+        resp = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": "invalid.token.here"},
+        )
+        assert resp.status_code == 401
+
+    async def test_refresh_with_access_token_returns_401(self, client):
+        token, _ = await _create_verified_user_and_get_tokens(
+            client, "wrongtype@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": token},
+        )
+        assert resp.status_code == 401
+
+    async def test_refresh_with_expired_token_returns_401(self, client):
+        import jwt as pyjwt
+        from datetime import datetime, timezone
+
+        from backend.config import settings
+
+        expired_payload = {
+            "sub": "expired@test.com",
+            "type": "refresh",
+            "exp": datetime(2020, 1, 1, tzinfo=timezone.utc),
+        }
+        expired_token = pyjwt.encode(
+            expired_payload,
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM,
+        )
+
+        resp = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": expired_token},
+        )
         assert resp.status_code == 401

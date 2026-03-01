@@ -12,7 +12,7 @@ import { config } from '../config';
 const TURNSTILE_SITE_KEY = config.turnstileSiteKey;
 
 interface AuthScreenProps {
-  onLogin: (token: string) => void;
+  onLogin: (token: string, refreshToken?: string) => void;
 }
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
@@ -64,7 +64,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       if (isLogin) {
         const { data } = await axios.post(`${API_BASE_URL}/auth/login`, { email, password, cf_token: cfToken });
         if (data.access_token) {
-          onLogin(data.access_token);
+          onLogin(data.access_token, data.refresh_token);
         } else {
           setError('Authentication failed: no token received');
         }
@@ -90,7 +90,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     try {
       const { data } = await axios.post(`${API_BASE_URL}/auth/verify_otp`, { email, otp_code: otpCode });
       if (data.access_token) {
-        onLogin(data.access_token);
+        onLogin(data.access_token, data.refresh_token);
       } else {
         setError('Verification failed: no token received');
       }
