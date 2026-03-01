@@ -15,7 +15,12 @@ from backend.auth.dependencies import get_current_user
 from backend.crud.document_crud import create_document
 from backend.database import get_db
 from backend.models.user import User
-from backend.security import UPLOAD_DIR, cleanup_files, validate_and_save_pdf
+from backend.security import (
+    MAX_MERGE_FILES,
+    UPLOAD_DIR,
+    cleanup_files,
+    validate_and_save_pdf,
+)
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.operations_executor_service import execute_operation_chain
 
@@ -46,6 +51,14 @@ async def process_with_llm(
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+    if len(files) > MAX_MERGE_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many files: {len(files)} provided, "
+                f"maximum is {MAX_MERGE_FILES}"
+            ),
+        )
 
     file_id = uuid.uuid4().hex
     output_dir = UPLOAD_DIR / file_id
