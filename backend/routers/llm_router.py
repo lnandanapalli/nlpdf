@@ -137,7 +137,7 @@ async def process_with_llm(
         )
 
         # 4. Execute the operation chain
-        original_name = (files[0].filename or "document").rsplit(".", 1)[0]
+        original_name = Path(files[0].filename or "document").stem
         if len(files) > 1:
             original_name = "merged_documents"
 
