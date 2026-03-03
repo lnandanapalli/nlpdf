@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     # Email Service
     RESEND_API_KEY: str
+    EMAIL_FROM: str = "NLPDF <noreply@nlpdf.site>"
 
     # Cookies
     COOKIE_SECURE: bool = True

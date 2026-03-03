@@ -23,7 +23,7 @@ def send_otp_email(to_email: str, otp_code: str) -> None:
     params = cast(
         resend.Emails.SendParams,
         {
-            "from": "NLPDF <noreply@nlpdf.online>",
+            "from": settings.EMAIL_FROM,
             "to": to_email,
             "subject": "Your NLPDF Verification Code",
             "html": html_content,
