@@ -57,6 +57,8 @@ class TestProcessMessage:
             mock_settings.LLM_RETRY_DELAY = 0.0  # no delay in tests
             mock_settings.LLM_MAX_TOKENS = 256
             mock_settings.LLM_TEMPERATURE = 0.01
+            mock_settings.OPENAI_API_KEY = None  # disabled by default
+            mock_settings.OPENAI_MODEL = "gpt-4o-mini"
 
             from backend.services.llm_service import LLMService
 
@@ -137,3 +139,58 @@ class TestProcessMessage:
 
         assert exc_info.value.status_code == 400
         assert "Could not understand your request" in exc_info.value.detail
+
+    async def test_huggingface_failure_falls_back_to_openai(self, llm_service):
+        """If HuggingFace raises, _call_openai is used and returns a valid result."""
+        llm_service.client.chat_completion = AsyncMock(
+            side_effect=Exception("HF exploded")
+        )
+        llm_service._call_openai = AsyncMock(
+            return_value='[{"operation": "compress", "parameters": {"level": 2}}]'
+        )
+        with patch("backend.services.llm_service.settings") as mock_settings:
+            mock_settings.OPENAI_API_KEY = "sk-test"
+            mock_settings.LLM_MAX_RETRIES = 3
+            mock_settings.LLM_RETRY_DELAY = 0.0
+            mock_settings.LLM_MAX_TOKENS = 256
+            mock_settings.LLM_TEMPERATURE = 0.01
+
+            result = await llm_service.process_message("compress this")
+
+        assert result[0].operation == "compress"
+        llm_service._call_openai.assert_called_once()
+
+    async def test_huggingface_failure_no_openai_key_raises_503(self, llm_service):
+        """If HuggingFace fails and OPENAI_API_KEY is not set, raises 503."""
+        llm_service.client.chat_completion = AsyncMock(
+            side_effect=Exception("HF exploded")
+        )
+        # OPENAI_API_KEY is None from the fixture
+
+        with pytest.raises(HTTPException) as exc_info:
+            await llm_service.process_message("compress this")
+
+        assert exc_info.value.status_code == 503
+
+    async def test_huggingface_and_openai_both_fail_raises_503(self, llm_service):
+        """If both HuggingFace and OpenAI fail, raises 503."""
+        llm_service.client.chat_completion = AsyncMock(
+            side_effect=Exception("HF exploded")
+        )
+        llm_service._call_openai = AsyncMock(
+            side_effect=HTTPException(
+                status_code=503,
+                detail="LLM service unavailable. Please try again later.",
+            )
+        )
+        with patch("backend.services.llm_service.settings") as mock_settings:
+            mock_settings.OPENAI_API_KEY = "sk-test"
+            mock_settings.LLM_MAX_RETRIES = 3
+            mock_settings.LLM_RETRY_DELAY = 0.0
+            mock_settings.LLM_MAX_TOKENS = 256
+            mock_settings.LLM_TEMPERATURE = 0.01
+
+            with pytest.raises(HTTPException) as exc_info:
+                await llm_service.process_message("compress this")
+
+        assert exc_info.value.status_code == 503

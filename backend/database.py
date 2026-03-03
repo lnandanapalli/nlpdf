@@ -2,12 +2,28 @@
 
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.config import settings
 
+database_url = URL.create(
+    drivername="mssql+aioodbc",
+    username=settings.DB_USER,
+    password=settings.DB_PASSWORD,
+    host=settings.DB_HOST,
+    port=settings.DB_PORT,
+    database=settings.DB_NAME,
+    query={
+        "driver": settings.DB_DRIVER,
+        "Encrypt": "yes",
+        "TrustServerCertificate": "no",
+        "Connection Timeout": "30",
+    },
+)
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    database_url,
     echo=False,
     pool_pre_ping=True,
 )

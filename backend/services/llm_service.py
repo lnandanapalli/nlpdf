@@ -5,6 +5,7 @@ import json
 import structlog
 from typing import Any
 
+import httpx
 from fastapi import HTTPException
 from huggingface_hub import AsyncInferenceClient
 
@@ -31,10 +32,12 @@ class LLMService:
         retry_context: str | None = None,
     ) -> str:
         """
-        Single LLM API call. Returns raw text response.
+        Single LLM API call. Tries HuggingFace first; falls back to OpenAI
+        only if HuggingFace returns a 429 rate-limit error and OPENAI_API_KEY
+        is configured. Returns raw text response.
 
         Raises:
-            HTTPException: If the API call fails.
+            HTTPException: If all available providers fail.
         """
         prompt_parts = [f"User request: {user_message}"]
 
@@ -70,7 +73,43 @@ class LLMService:
                 raise ValueError("LLM returned empty content")
             return content.strip()
         except Exception as e:
+            if settings.OPENAI_API_KEY:
+                logger.warning("HuggingFace failed (%s). Falling back to OpenAI.", e)
+                return await self._call_openai(messages)
             logger.error("LLM API call failed: %s", e)
+            raise HTTPException(
+                status_code=503,
+                detail="LLM service unavailable. Please try again later.",
+            )
+
+    async def _call_openai(self, messages: list[dict]) -> str:
+        """
+        OpenAI Chat Completions fallback call.
+
+        Raises:
+            HTTPException: If the OpenAI call fails.
+        """
+        payload = {
+            "model": settings.OPENAI_MODEL,
+            "messages": messages,
+            "max_tokens": settings.LLM_MAX_TOKENS,
+            "temperature": settings.LLM_TEMPERATURE,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+                    json=payload,
+                )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            if not content:
+                raise ValueError("OpenAI returned empty content")
+            logger.info("LLM response from OpenAI fallback")
+            return content.strip()
+        except Exception as e:
+            logger.error("OpenAI fallback failed: %s", e)
             raise HTTPException(
                 status_code=503,
                 detail="LLM service unavailable. Please try again later.",

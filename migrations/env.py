@@ -2,7 +2,7 @@
 
 from logging.config import fileConfig
 
-from sqlalchemy import create_engine, pool
+from sqlalchemy import URL, create_engine, pool
 
 from alembic import context
 
@@ -17,10 +17,22 @@ import backend.models  # noqa: F401
 config = context.config
 
 # Alembic requires a synchronous connection URL.
-# The runtime app uses mssql+aioodbc:// for async; we swap to mssql+pyodbc://
-# here so Alembic can run schema migrations synchronously.
-_sync_url = settings.DATABASE_URL.replace("mssql+aioodbc://", "mssql+pyodbc://")
-config.set_main_option("sqlalchemy.url", _sync_url)
+# Build the sync URL using mssql+pyodbc:// from the same DB settings.
+_sync_url = URL.create(
+    drivername="mssql+pyodbc",
+    username=settings.DB_USER,
+    password=settings.DB_PASSWORD,
+    host=settings.DB_HOST,
+    port=settings.DB_PORT,
+    database=settings.DB_NAME,
+    query={
+        "driver": settings.DB_DRIVER,
+        "Encrypt": "yes",
+        "TrustServerCertificate": "no",
+        "Connection Timeout": "30",
+    },
+)
+config.set_main_option("sqlalchemy.url", str(_sync_url))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
