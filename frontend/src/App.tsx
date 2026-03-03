@@ -11,7 +11,7 @@ import CommandInput from './components/CommandInput';
 import ProcessingState from './components/ProcessingState';
 import ResultCard from './components/ResultCard';
 import AuthScreen from './components/AuthScreen';
-import { processPDFs, validateSession, API_BASE_URL } from './services/api';
+import { processPDFs, validateSession, logout } from './services/api';
 
 type AppState = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
@@ -23,9 +23,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(
-    !!localStorage.getItem('token'),
-  );
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
   const theme = useTheme();
 
@@ -37,50 +35,48 @@ function App() {
     setErrorMessage('');
   };
 
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+  const handleLogout = useCallback(async () => {
+    await logout();
     setIsAuthenticated(false);
     handleReset();
   }, []);
 
-  // Validate stored token on mount
+  // Validate session on mount (cookie-based — no localStorage check needed)
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setIsCheckingAuth(false);
-      return;
-    }
     validateSession()
       .then((valid) => {
         if (valid) {
           setIsAuthenticated(true);
-        } else {
-          handleLogout();
         }
       })
       .finally(() => setIsCheckingAuth(false));
-  }, [handleLogout]);
+  }, []);
 
   // Listen for session-expired events from the axios interceptor
   useEffect(() => {
-    const onExpired = () => handleLogout();
+    const onExpired = () => {
+      setIsAuthenticated(false);
+      handleReset();
+    };
     window.addEventListener('session-expired', onExpired);
     return () => window.removeEventListener('session-expired', onExpired);
-  }, [handleLogout]);
+  }, []);
 
   // Proactive session guard: re-validate when user returns to the tab
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isAuthenticated) {
         validateSession().then((valid) => {
-          if (!valid) handleLogout();
+          if (!valid) {
+            setIsAuthenticated(false);
+            handleReset();
+          }
         });
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [isAuthenticated, handleLogout]);
+  }, [isAuthenticated]);
 
   const handleProcess = async (command: string) => {
     if (files.length === 0) return;
@@ -114,11 +110,7 @@ function App() {
     }
   };
 
-  const handleLogin = (newToken: string, refreshToken?: string) => {
-    localStorage.setItem('token', newToken);
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
-    }
+  const handleLogin = () => {
     setIsAuthenticated(true);
   };
 

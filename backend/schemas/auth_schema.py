@@ -21,20 +21,6 @@ class LoginRequest(BaseModel):
     cf_token: str
 
 
-class TokenResponse(BaseModel):
-    """JWT token response."""
-
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class RefreshRequest(BaseModel):
-    """Request to refresh an access token."""
-
-    refresh_token: str
-
-
 class UserResponse(BaseModel):
     """Public user information."""
 

@@ -2,105 +2,113 @@
 
 AI-powered PDF processing using natural language.
 
-## Idea
+Upload PDFs and describe what you want in plain English. The system uses Llama 3.1 to parse your instructions and executes the operations.
 
-Upload a PDF and describe what you want to do with it in plain English. The system processes your request and returns the modified PDF.
-
-Example: "compress this and split into 3 parts"
+**Examples:**
+- "compress this and split into 3 parts"
+- "extract pages 5-10 and rotate page 7 by 90 degrees"
+- "merge these files and compress the result"
+- "convert this markdown to PDF on letter paper"
 
 ## Features
 
-- **Natural Language Parsing**: Uses Llama 3.1 via HuggingFace Inference API to parse instructions into structured operations.
-- **PDF Manipulation**: Merging, splitting, rotating, and compressing PDFs.
-- **User Authentication**: JWT-based auth with email OTP verification on signup to prevent spam.
-- **Relational Database**: Async SQLAlchemy with Alembic migrations.
-- **Comprehensive Testing**: Over 130 tests covering unit functionality, integration, and security edge cases.
-- **Security & Rate Limiting**: File validation, temporary file cleanup, and IP-based rate limiting.
+- **Natural Language Parsing** — Llama 3.1 via HuggingFace Inference API
+- **PDF Operations** — Compress, split, merge, rotate, markdown-to-PDF (chainable)
+- **Auth** — httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
+- **Security** — File validation, CAPTCHA, rate limiting, Argon2id hashing
 
-## Structure
+## Tech Stack
+
+| Layer    | Technology                                          |
+| -------- | --------------------------------------------------- |
+| Frontend | React 19, TypeScript, Material UI, Vite             |
+| Backend  | Python 3.13, FastAPI, SQLAlchemy, Alembic           |
+| Database | SQL Server (aioodbc)                                |
+| PDF      | pypdf, pikepdf, Pillow, xhtml2pdf                   |
+| LLM      | HuggingFace Inference API                           |
+
+## Project Structure
 
 ```
 nlpdf/
 ├── backend/
-│   ├── auth/         # JWT and password hashing
+│   ├── auth/         # JWT, cookies, CSRF, password hashing
 │   ├── crud/         # Database operations
 │   ├── models/       # SQLAlchemy models
-│   ├── routers/      # FastAPI endpoint definitions
-│   ├── schemas/      # Pydantic validation models
-│   ├── services/     # Core logic (LLM, PDF ops, email)
-│   └── validators/   # Reusable validation logic
-├── migrations/       # Alembic version control
-├── tests/            # Comprehensive pytest suite
-└── docker-compose.yml
+│   ├── routers/      # API endpoint definitions
+│   ├── schemas/      # Pydantic request/response models
+│   ├── services/     # Core logic (LLM, PDF ops, email, CAPTCHA)
+│   └── validators/   # Input validation
+├── frontend/src/
+│   ├── components/   # React components
+│   └── services/     # API client
+├── migrations/       # Alembic migrations
+├── tests/            # pytest suite
+└── Dockerfile
 ```
 
 ## Getting Started
 
-### Prerequisites
-
-- Python 3.13
-- Poetry
-- Docker Desktop
-- A HuggingFace API Token
-- A [Resend](https://resend.com) API key (for OTP emails)
-- A [Cloudflare Turnstile](https://cloudflare.com) site (for CAPTCHA)
-
-### Setup
-
-1. **Install dependencies:**
-
-   ```bash
-   poetry install
-   ```
-
-2. **Configure the environment:**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Fill in your secrets in `.env`.
-
-3. **Start the database and run migrations:**
-
-   ```bash
-   docker compose up -d
-   poetry run alembic upgrade head
-   ```
-
-4. **Start the API server:**
-
-   ```bash
-   poetry run uvicorn backend.main:app --reload
-   ```
-
-5. **API docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-
-## Code Quality
-
-Pre-commit hooks run automatically on every `git commit`:
-
-| Hook     | Purpose                         |
-| -------- | ------------------------------- |
-| `ruff`   | Linting and import sorting      |
-| `black`  | Code formatting                 |
-| `ty`     | Static type checking            |
-| `bandit` | Security vulnerability scanning |
-
-Install the hooks after cloning:
+**Prerequisites:** Python 3.13, [Poetry](https://python-poetry.org/), Node.js 20+, Docker
 
 ```bash
-poetry run pre-commit install
+# Backend
+poetry install
+cp .env.example .env        # fill in your secrets
+
+# Frontend
+cd frontend && npm install
+cp .env.example .env        # fill in your secrets
+cd ..
+
+# Database
+docker compose up -d
+poetry run alembic upgrade head
+
+# Run
+poetry run uvicorn backend.main:app --reload   # backend at :8000
+cd frontend && npm run dev                      # frontend at :5173
 ```
 
-To run them manually against all files:
+API docs available at [localhost:8000/docs](http://localhost:8000/docs) when running.
+
+## API Endpoints
+
+| Method | Path               | Auth   | Purpose                             |
+| ------ | ------------------ | ------ | ----------------------------------- |
+| POST   | `/auth/signup`     | -      | Register, send OTP                  |
+| POST   | `/auth/verify_otp` | -      | Verify OTP, set auth cookies        |
+| POST   | `/auth/resend_otp` | -      | Resend OTP                          |
+| POST   | `/auth/login`      | -      | Authenticate, set auth cookies      |
+| POST   | `/auth/refresh`    | Cookie | Rotate token pair                   |
+| POST   | `/auth/logout`     | Cookie | Revoke refresh token, clear cookies |
+| GET    | `/auth/me`         | Cookie | Current user info                   |
+| POST   | `/pdf/process`     | Cookie | Process PDFs with natural language  |
+| GET    | `/health`          | -      | Health check                        |
+
+## Docker
 
 ```bash
-poetry run pre-commit run --all-files
+docker build -t nlpdf .
+docker run -p 8000:8000 --env-file .env nlpdf
 ```
+
+Packages the backend only. Frontend is deployed separately as static files.
 
 ## Testing
 
 ```bash
 poetry run pytest tests/ -v
 ```
+
+## Code Quality
+
+Pre-commit hooks run `ruff`, `black`, `ty`, and `bandit` on every commit.
+
+```bash
+poetry run pre-commit install
+```
+
+## Environment Variables
+
+See [`.env.example`](.env.example) (backend) and [`frontend/.env.example`](frontend/.env.example) (frontend).

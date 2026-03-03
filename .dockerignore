@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Environment & secrets
+.env
+.env.local
+
+# IDE & tools
+.claude/
+.vscode/
+.idea/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.so
+
+# Frontend (deployed separately)
+frontend/
+
+# Tests
+tests/
+
+# Docker (prevent recursive copy)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OS files
+Thumbs.db
+.DS_Store

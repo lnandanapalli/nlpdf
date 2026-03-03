@@ -146,7 +146,8 @@ class TestGetClientIp:
     def test_from_x_forwarded_for(self):
         request = MagicMock()
         request.headers = {"X-Forwarded-For": "1.2.3.4, 5.6.7.8"}
-        assert get_client_ip(request) == "1.2.3.4"
+        # Uses rightmost IP (appended by reverse proxy, not spoofable)
+        assert get_client_ip(request) == "5.6.7.8"
 
     def test_from_request_client(self):
         request = MagicMock()

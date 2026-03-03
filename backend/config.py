@@ -1,10 +1,14 @@
 """Configuration management using pydantic-settings."""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings from environment variables."""
+
+    # Environment: "production" or "development"
+    APP_ENV: str = "production"
 
     # HuggingFace Config
     HUGGINGFACE_API_TOKEN: str
@@ -39,12 +43,26 @@ class Settings(BaseSettings):
     # Email Service
     RESEND_API_KEY: str
 
+    # Cookies
+    COOKIE_SECURE: bool = True
+    COOKIE_DOMAIN: str | None = None
+
     # Cloudflare Turnstile
     CLOUDFLARE_TURNSTILE_SECRET_KEY: str
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+
+    @model_validator(mode="after")
+    def _apply_dev_overrides(self) -> "Settings":
+        """Relax production defaults when running in development."""
+        if self.APP_ENV == "development":
+            self.COOKIE_SECURE = False
+        # Treat empty string as None (env var set but blank)
+        if self.COOKIE_DOMAIN is not None and self.COOKIE_DOMAIN.strip() == "":
+            self.COOKIE_DOMAIN = None
+        return self
 
 
 settings = Settings()  # type: ignore

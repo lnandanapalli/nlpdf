@@ -5,17 +5,17 @@ export const API_BASE_URL = config.apiBaseUrl;
 
 const PDF_PROCESSING_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
-// Shared axios instance with silent refresh interceptor
-const api = axios.create({ baseURL: API_BASE_URL });
+// Shared axios instance with credentials (cookies sent automatically)
+const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
 
 let isRefreshing = false;
 let pendingRequests: Array<{
-  resolve: (token: string) => void;
+  resolve: () => void;
   reject: (err: unknown) => void;
 }> = [];
 
-function onRefreshed(token: string) {
-  pendingRequests.forEach((p) => p.resolve(token));
+function onRefreshed() {
+  pendingRequests.forEach((p) => p.resolve());
   pendingRequests = [];
 }
 
@@ -24,10 +24,18 @@ function onRefreshFailed(err: unknown) {
   pendingRequests = [];
 }
 
+function getCookie(name: string): string | undefined {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+// Attach CSRF token header on mutating requests
 api.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('token');
-  if (token && cfg.headers) {
-    cfg.headers.Authorization = `Bearer ${token}`;
+  if (cfg.method && cfg.method !== 'get') {
+    const csrfToken = getCookie('csrf_token');
+    if (csrfToken && cfg.headers) {
+      cfg.headers['X-CSRF-Token'] = csrfToken;
+    }
   }
   return cfg;
 });
@@ -53,36 +61,20 @@ api.interceptors.response.use(
       // Another refresh is in flight — queue this request
       return new Promise((resolve, reject) => {
         pendingRequests.push({
-          resolve: (token: string) => {
-            original.headers.Authorization = `Bearer ${token}`;
-            resolve(api(original));
-          },
+          resolve: () => resolve(api(original)),
           reject,
         });
       });
     }
 
     isRefreshing = true;
-    const refreshToken = localStorage.getItem('refreshToken');
-
-    if (!refreshToken) {
-      isRefreshing = false;
-      dispatchSessionExpired();
-      return Promise.reject(error);
-    }
 
     try {
-      const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-        refresh_token: refreshToken,
-      });
-
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('refreshToken', data.refresh_token);
+      await api.post('/auth/refresh');
 
       isRefreshing = false;
-      onRefreshed(data.access_token);
+      onRefreshed();
 
-      original.headers.Authorization = `Bearer ${data.access_token}`;
       return api(original);
     } catch {
       isRefreshing = false;
@@ -94,8 +86,6 @@ api.interceptors.response.use(
 );
 
 function dispatchSessionExpired() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
   window.dispatchEvent(new Event('session-expired'));
 }
 
@@ -112,6 +102,17 @@ export async function validateSession(): Promise<boolean> {
     // The interceptor will have attempted a refresh on 401.
     // If we still got an error, session is invalid.
     return false;
+  }
+}
+
+/**
+ * Log out the current user (revokes tokens and clears cookies server-side).
+ */
+export async function logout(): Promise<void> {
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    // Even if the call fails, we still want the frontend to reset
   }
 }
 

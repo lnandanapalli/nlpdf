@@ -1,5 +1,6 @@
 """JWT token creation and verification."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -20,17 +21,25 @@ def create_access_token(data: dict) -> str:
     )
 
 
-def create_refresh_token(data: dict) -> str:
-    """Create a JWT refresh token with a longer expiry."""
+def create_refresh_token(data: dict) -> tuple[str, str]:
+    """Create a JWT refresh token with a longer expiry.
+
+    Returns:
+        A tuple of (encoded_token, jti) where jti is the unique token
+        identifier that must be stored for one-time-use validation.
+    """
+    jti = secrets.token_urlsafe(16)
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
     )
     to_encode["exp"] = expire
     to_encode["type"] = "refresh"
-    return jwt.encode(
+    to_encode["jti"] = jti
+    token = jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
+    return token, jti
 
 
 def decode_access_token(token: str) -> dict:

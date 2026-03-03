@@ -20,6 +20,14 @@ class User(Base):
     is_verified = Column(Integer, default=False, nullable=False)
     otp_code = Column(String(6), nullable=True)
     otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    otp_attempts = Column(Integer, default=0, nullable=False)
+
+    # Login security
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+
+    # Refresh token rotation (stores JTI of the current valid refresh token)
+    refresh_token_jti = Column(String(43), nullable=True)
 
     # Track statistics
     total_processed_pdfs = Column(Integer, default=0)

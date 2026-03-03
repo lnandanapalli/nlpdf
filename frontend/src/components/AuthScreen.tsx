@@ -12,7 +12,7 @@ import { config } from '../config';
 const TURNSTILE_SITE_KEY = config.turnstileSiteKey;
 
 interface AuthScreenProps {
-  onLogin: (token: string, refreshToken?: string) => void;
+  onLogin: () => void;
 }
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
@@ -62,12 +62,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setLoading(true);
     try {
       if (isLogin) {
-        const { data } = await axios.post(`${API_BASE_URL}/auth/login`, { email, password, cf_token: cfToken });
-        if (data.access_token) {
-          onLogin(data.access_token, data.refresh_token);
-        } else {
-          setError('Authentication failed: no token received');
-        }
+        await axios.post(`${API_BASE_URL}/auth/login`, { email, password, cf_token: cfToken }, { withCredentials: true });
+        onLogin();
       } else {
         await axios.post(`${API_BASE_URL}/auth/signup`, { email, password, cf_token: cfToken });
         setSuccess('Verification code sent to your email.');
@@ -88,12 +84,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     try {
-      const { data } = await axios.post(`${API_BASE_URL}/auth/verify_otp`, { email, otp_code: otpCode });
-      if (data.access_token) {
-        onLogin(data.access_token, data.refresh_token);
-      } else {
-        setError('Verification failed: no token received');
-      }
+      await axios.post(`${API_BASE_URL}/auth/verify_otp`, { email, otp_code: otpCode }, { withCredentials: true });
+      onLogin();
     } catch (err) {
       handleError(err, 'Verification failed. Please check the code and try again.');
     } finally {

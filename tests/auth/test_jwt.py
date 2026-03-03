@@ -40,23 +40,29 @@ class TestCreateAccessToken:
 class TestCreateRefreshToken:
     """Tests for create_refresh_token."""
 
-    def test_returns_string(self):
-        token = create_refresh_token({"sub": "user@example.com"})
+    def test_returns_token_and_jti(self):
+        token, jti = create_refresh_token({"sub": "user@example.com"})
         assert isinstance(token, str)
+        assert isinstance(jti, str)
 
     def test_token_has_refresh_type(self):
-        token = create_refresh_token({"sub": "user@example.com"})
+        token, _ = create_refresh_token({"sub": "user@example.com"})
         payload = decode_refresh_token(token)
         assert payload["type"] == "refresh"
 
     def test_token_contains_subject(self):
-        token = create_refresh_token({"sub": "user@example.com"})
+        token, _ = create_refresh_token({"sub": "user@example.com"})
         payload = decode_refresh_token(token)
         assert payload["sub"] == "user@example.com"
 
+    def test_token_contains_jti(self):
+        token, jti = create_refresh_token({"sub": "user@example.com"})
+        payload = decode_refresh_token(token)
+        assert payload["jti"] == jti
+
     def test_token_has_longer_expiry(self):
         access = create_access_token({"sub": "a@b.com"})
-        refresh = create_refresh_token({"sub": "a@b.com"})
+        refresh, _ = create_refresh_token({"sub": "a@b.com"})
 
         access_payload = decode_access_token(access)
         refresh_payload = decode_refresh_token(refresh)
@@ -98,7 +104,7 @@ class TestDecodeAccessToken:
             decode_access_token(tampered)
 
     def test_rejects_refresh_token(self):
-        token = create_refresh_token({"sub": "user@test.com"})
+        token, _ = create_refresh_token({"sub": "user@test.com"})
         with pytest.raises(pyjwt.InvalidTokenError):
             decode_access_token(token)
 
@@ -107,7 +113,7 @@ class TestDecodeRefreshToken:
     """Tests for decode_refresh_token."""
 
     def test_valid_token_succeeds(self):
-        token = create_refresh_token({"sub": "a@b.com"})
+        token, _ = create_refresh_token({"sub": "a@b.com"})
         payload = decode_refresh_token(token)
         assert payload["sub"] == "a@b.com"
 
