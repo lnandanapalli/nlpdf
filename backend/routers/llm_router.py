@@ -137,9 +137,10 @@ async def process_with_llm(
         )
 
         # 4. Execute the operation chain
-        original_name = Path(files[0].filename or "document").stem
+        original_filenames = [Path(f.filename or "document").stem for f in files]
+        original_name = original_filenames[0]
         if len(files) > 1:
-            original_name = "merged_documents"
+            original_name = "documents"
 
         result_path = await run_in_threadpool(
             execute_operation_chain,
@@ -147,11 +148,13 @@ async def process_with_llm(
             input_paths,
             output_dir,
             original_name,
+            original_filenames,
         )
 
         if result_path.suffix == ".zip":
             media_type = "application/zip"
-            filename = f"{original_name}_split.zip"
+            last_op = operations[-1].operation
+            filename = f"{last_op}_{original_name}.zip"
         else:
             media_type = "application/pdf"
             last_op = operations[-1].operation

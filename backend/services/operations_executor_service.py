@@ -1,5 +1,7 @@
 """Execute validated LLM operations using existing services."""
 
+import zipfile
+
 import structlog
 from pathlib import Path
 
@@ -20,6 +22,9 @@ from backend.services.rotate_service import rotate_pdf
 from backend.services.split_service import split_pdf
 
 logger = structlog.get_logger(__name__)
+
+# Operations that support bulk mode (apply to each file individually)
+BULK_OPERATIONS = (CompressOperation, MarkdownToPdfOperation)
 
 
 def execute_operation(
@@ -87,54 +92,104 @@ def execute_operation(
     raise HTTPException(status_code=400, detail="Unknown operation")
 
 
+def _is_bulk(operation: OperationType, input_count: int) -> bool:
+    """Check if an operation should run in bulk mode."""
+    return isinstance(operation, BULK_OPERATIONS) and input_count > 1
+
+
+def _zip_results(
+    result_paths: list[Path],
+    output_dir: Path,
+    original_filenames: list[str],
+    op_name: str,
+) -> Path:
+    """ZIP multiple result files with meaningful names."""
+    zip_path = output_dir / "output.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, path in enumerate(result_paths):
+            if i < len(original_filenames):
+                name = original_filenames[i]
+            else:
+                name = f"file_{i + 1}"
+            arc_name = f"{op_name}_{name}{path.suffix}"
+            zf.write(path, arc_name)
+    return zip_path
+
+
 def execute_operation_chain(
     operations: list[OperationType],
     input_paths: list[Path],
     output_dir: Path,
     original_filename: str = "document",
+    original_filenames: list[str] | None = None,
 ) -> Path:
     """
     Execute a chain of operations sequentially.
 
     Each operation's output becomes the next operation's input.
+    Bulk-eligible operations (compress, markdown_to_pdf) are applied
+    to each input file individually when multiple inputs exist.
 
     Args:
         operations: Ordered list of validated operations.
         input_paths: Initial input file paths.
         output_dir: Directory to write intermediate and final outputs.
-        original_filename: Base name for the output file.
+        original_filename: Base name for the output file (single-file case).
+        original_filenames: Per-file names for ZIP naming in bulk mode.
 
     Returns:
-        Path to the final output file.
+        Path to the final output file (or ZIP of results).
 
     Raises:
         HTTPException: If any operation fails.
     """
-    if len(operations) == 1:
+    if original_filenames is None:
+        original_filenames = [original_filename]
+
+    # Single operation, single file — fast path (unchanged behavior)
+    if len(operations) == 1 and not _is_bulk(operations[0], len(input_paths)):
         output_path = output_dir / "output.pdf"
         return execute_operation(
             operations[0], input_paths, output_path, original_filename
         )
 
-    current_inputs = input_paths
+    # Single bulk operation — no chain needed
+    if len(operations) == 1 and _is_bulk(operations[0], len(input_paths)):
+        results = _execute_bulk(operations[0], input_paths, output_dir)
+        return _zip_results(
+            results, output_dir, original_filenames, operations[0].operation
+        )
+
+    current_inputs = list(input_paths)
     result_path: Path | None = None
     intermediates: list[Path] = []
 
     for i, operation in enumerate(operations):
         is_last = i == len(operations) - 1
 
-        if is_last:
-            step_output = output_dir / "output.pdf"
+        if _is_bulk(operation, len(current_inputs)):
+            step_dir = output_dir / f"step_{i}"
+            step_dir.mkdir(exist_ok=True)
+            results = _execute_bulk(operation, current_inputs, step_dir)
+            intermediates.extend(results)
+
+            if is_last:
+                result_path = _zip_results(
+                    results, output_dir, original_filenames, operation.operation
+                )
+            else:
+                current_inputs = results
         else:
-            step_output = output_dir / f"step_{i}.pdf"
-            intermediates.append(step_output)
+            if is_last:
+                step_output = output_dir / "output.pdf"
+            else:
+                step_output = output_dir / f"step_{i}.pdf"
+                intermediates.append(step_output)
 
-        result_path = execute_operation(
-            operation, current_inputs, step_output, original_filename
-        )
-
-        # Next step takes this step's output as its single input
-        current_inputs = [result_path]
+            result_path = execute_operation(
+                operation, current_inputs, step_output, original_filename
+            )
+            current_inputs = [result_path]
 
     # Clean up intermediate files
     for intermediate in intermediates:
@@ -147,3 +202,19 @@ def execute_operation_chain(
     if result_path is None:
         raise HTTPException(status_code=400, detail="No operations to execute")
     return result_path
+
+
+def _execute_bulk(
+    operation: OperationType,
+    input_paths: list[Path],
+    output_dir: Path,
+) -> list[Path]:
+    """Apply an operation to each input file individually."""
+    results: list[Path] = []
+    for j, inp in enumerate(input_paths):
+        sub_dir = output_dir / f"bulk_{j}"
+        sub_dir.mkdir(exist_ok=True)
+        sub_output = sub_dir / "output.pdf"
+        result = execute_operation(operation, [inp], sub_output)
+        results.append(result)
+    return results

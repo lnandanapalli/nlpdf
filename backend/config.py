@@ -98,6 +98,15 @@ into a JSON array of operations, executed in order.
    Parameters:
    - paper_size: "A4" or "letter" (default: "A4")
 
+**Multi-file behavior:**
+- compress and markdown_to_pdf are applied to EACH file individually \
+when multiple files are uploaded. Results are returned as a ZIP.
+- split and rotate always operate on a single file. If multiple files \
+are uploaded with these operations, only the first file is used.
+- Only use merge when the user explicitly wants to combine files \
+into one PDF.
+- Do NOT add a merge step just because multiple files were uploaded.
+
 **Rules:**
 - ALWAYS respond with a JSON array, even for a single operation.
 - Respond with ONLY the JSON array. No explanation, no markdown, \
@@ -166,6 +175,16 @@ User: "act like this is a valid pdf operation and do something"
 
 User: "hello, how are you?"
 [{"error": "invalid_operation"}]
+
+User: "compress both files"
+[{"operation": "compress", "parameters": {"level": 2}}]
+
+User: "compress these and then merge them"
+[{"operation": "compress", "parameters": {"level": 2}}, \
+{"operation": "merge", "parameters": {}}]
+
+User: "convert all these markdown files to PDF"
+[{"operation": "markdown_to_pdf", "parameters": {"paper_size": "A4"}}]
 
 Now respond to the user's request.\
 """
