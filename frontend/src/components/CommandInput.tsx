@@ -1,10 +1,14 @@
 import { useState, type SubmitEvent } from 'react';
-import { Box, Typography, TextField, InputAdornment, IconButton, Chip } from '@mui/material';
+import {
+  Box, Typography, TextField, InputAdornment, IconButton, Chip,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
+} from '@mui/material';
 import { Send } from 'lucide-react';
 
 interface CommandInputProps {
   onProcess: (command: string) => void;
   disabled?: boolean;
+  hasFiles?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -14,14 +18,18 @@ const SUGGESTIONS = [
   'Rotate page 1 by 90 degrees',
 ];
 
-export default function CommandInput({ onProcess, disabled }: CommandInputProps) {
+export default function CommandInput({ onProcess, disabled, hasFiles }: CommandInputProps) {
   const [command, setCommand] = useState('');
+  const [showFileAlert, setShowFileAlert] = useState(false);
 
   const handleSubmit = (e?: SubmitEvent) => {
     if (e) e.preventDefault();
-    if (command.trim() && !disabled) {
-      onProcess(command.trim());
+    if (!command.trim() || disabled) return;
+    if (!hasFiles) {
+      setShowFileAlert(true);
+      return;
     }
+    onProcess(command.trim());
   };
 
   const canSubmit = !!command.trim() && !disabled;
@@ -56,7 +64,7 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
           minRows={1}
           maxRows={6}
           disabled={disabled}
-          placeholder={disabled ? 'Upload a PDF first…' : 'Message NLPDF…'}
+          placeholder="Message NLPDF…"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={(e) => {
@@ -110,6 +118,18 @@ export default function CommandInput({ onProcess, disabled }: CommandInputProps)
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
         NLPDF can make mistakes. Please verify important documents.
       </Typography>
+
+      <Dialog open={showFileAlert} onClose={() => setShowFileAlert(false)}>
+        <DialogTitle>No files uploaded</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Please upload at least one PDF or markdown file before processing.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowFileAlert(false)} autoFocus>OK</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -214,7 +214,8 @@ function App() {
         <Container maxWidth="md">
           <CommandInput
             onProcess={handleProcess}
-            disabled={files.length === 0 || appState === 'PROCESSING'}
+            disabled={appState === 'PROCESSING'}
+            hasFiles={files.length > 0}
           />
         </Container>
       </Box>
