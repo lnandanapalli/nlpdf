@@ -144,13 +144,15 @@ class LLMService:
             logger.info("Validated operations: %s", op_names)
             return operations
 
+        logger.error(
+            "LLM failed after %d attempts. Last issue: %s",
+            max_retries,
+            retry_context,
+        )
         raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Failed to produce valid operations "
-                f"after {max_retries} attempts. "
-                f"Last issue: {retry_context}"
-            ),
+            status_code=400,
+            detail="Could not understand your request. "
+            "Please try rephrasing your instruction.",
         )
 
 

@@ -82,6 +82,13 @@ def execute_operation(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.warning("Validation error in %s: %s", operation.operation, e)
+        raise HTTPException(
+            status_code=400,
+            detail="The operation could not be completed. Please check "
+            "that your page numbers and ranges are valid for the uploaded document.",
+        )
     except Exception:
         logger.exception("Operation %s failed", operation.operation)
         raise HTTPException(

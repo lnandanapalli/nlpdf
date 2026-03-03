@@ -129,11 +129,11 @@ class TestProcessMessage:
         assert exc_info.value.status_code == 400
         assert "Please describe a valid PDF operation" in exc_info.value.detail
 
-    async def test_all_retries_exhausted_raises_500(self, llm_service):
+    async def test_all_retries_exhausted_raises_400(self, llm_service):
         llm_service._call_llm = AsyncMock(return_value="invalid json forever")
 
         with pytest.raises(HTTPException) as exc_info:
             await llm_service.process_message("compress this")
 
-        assert exc_info.value.status_code == 500
-        assert "Failed to produce" in exc_info.value.detail
+        assert exc_info.value.status_code == 400
+        assert "Could not understand your request" in exc_info.value.detail

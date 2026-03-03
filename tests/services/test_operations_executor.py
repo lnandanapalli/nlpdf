@@ -100,3 +100,52 @@ class TestExecuteRotateOperation:
             execute_operation(op, [sample_pdf], tmp_output)
 
         mock.assert_called_once_with(sample_pdf, [(1, 90)], tmp_output)
+
+
+class TestErrorHandling:
+    """Tests for error handling in execute_operation."""
+
+    def test_value_error_returns_400(self, sample_pdf, tmp_output):
+        """ValueError from services should be caught and returned as 400."""
+        op = RotateOperation(
+            operation="rotate",
+            parameters=RotateParams(rotations=[(999, 90)]),
+        )
+
+        with patch("backend.services.operations_executor_service.rotate_pdf") as mock:
+            mock.side_effect = ValueError("Page 999 exceeds document length")
+            with pytest.raises(HTTPException) as exc_info:
+                execute_operation(op, [sample_pdf], tmp_output)
+
+        assert exc_info.value.status_code == 400
+        assert "page numbers and ranges" in exc_info.value.detail.lower()
+
+    def test_generic_exception_returns_500(self, sample_pdf, tmp_output):
+        """Unexpected exceptions should be caught and returned as 500."""
+        op = CompressOperation(
+            operation="compress",
+            parameters=CompressParams(level=2),
+        )
+
+        with patch("backend.services.operations_executor_service.compress_pdf") as mock:
+            mock.side_effect = RuntimeError("unexpected disk error")
+            with pytest.raises(HTTPException) as exc_info:
+                execute_operation(op, [sample_pdf], tmp_output)
+
+        assert exc_info.value.status_code == 500
+        assert "Something went wrong" in exc_info.value.detail
+
+    def test_http_exception_passes_through(self, sample_pdf, tmp_output):
+        """HTTPException from services should pass through unchanged."""
+        op = CompressOperation(
+            operation="compress",
+            parameters=CompressParams(level=2),
+        )
+
+        with patch("backend.services.operations_executor_service.compress_pdf") as mock:
+            mock.side_effect = HTTPException(status_code=413, detail="File too large")
+            with pytest.raises(HTTPException) as exc_info:
+                execute_operation(op, [sample_pdf], tmp_output)
+
+        assert exc_info.value.status_code == 413
+        assert exc_info.value.detail == "File too large"
