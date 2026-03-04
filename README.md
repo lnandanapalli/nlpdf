@@ -2,9 +2,10 @@
 
 AI-powered PDF processing using natural language.
 
-Upload PDFs and describe what you want in plain English. The system uses Llama 3.1 to parse your instructions and executes the operations.
+Upload PDFs and describe what you want in plain English. The system uses Llama 3.1 (via HuggingFace) to parse your instructions and executes the operations. If HuggingFace is unavailable, requests automatically fall back to OpenAI gpt-4o-mini.
 
 **Examples:**
+
 - "compress this and split into 3 parts"
 - "extract pages 5-10 and rotate page 7 by 90 degrees"
 - "merge these files and compress the result"
@@ -12,20 +13,20 @@ Upload PDFs and describe what you want in plain English. The system uses Llama 3
 
 ## Features
 
-- **Natural Language Parsing** — Llama 3.1 via HuggingFace Inference API
+- **Natural Language Parsing** — Llama 3.1 via HuggingFace Inference API, with automatic OpenAI fallback on failure
 - **PDF Operations** — Compress, split, merge, rotate, markdown-to-PDF (chainable)
 - **Auth** — httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
 - **Security** — File validation, CAPTCHA, rate limiting, Argon2id hashing
 
 ## Tech Stack
 
-| Layer    | Technology                                          |
-| -------- | --------------------------------------------------- |
-| Frontend | React 19, TypeScript, Material UI, Vite             |
-| Backend  | Python 3.13, FastAPI, SQLAlchemy, Alembic           |
-| Database | SQL Server (aioodbc)                                |
-| PDF      | pypdf, pikepdf, Pillow, xhtml2pdf                   |
-| LLM      | HuggingFace Inference API                           |
+| Layer    | Technology                                                         |
+| -------- | ------------------------------------------------------------------ |
+| Frontend | React 19, TypeScript, Material UI, Vite                            |
+| Backend  | Python 3.13, FastAPI, SQLAlchemy, Alembic                          |
+| Database | SQL Server (aioodbc)                                               |
+| PDF      | pypdf, pikepdf, Pillow, xhtml2pdf                                  |
+| LLM      | HuggingFace Inference API (primary), OpenAI gpt-4o-mini (fallback) |
 
 ## Project Structure
 
@@ -112,3 +113,13 @@ poetry run pre-commit install
 ## Environment Variables
 
 See [`.env.example`](.env.example) (backend) and [`frontend/.env.example`](frontend/.env.example) (frontend).
+
+### LLM Configuration
+
+The backend uses HuggingFace as the primary LLM provider. If HuggingFace fails for any reason, it automatically falls back to OpenAI for that request.
+
+| Variable                | Required | Description                                                                            |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `HUGGINGFACE_API_TOKEN` | Yes      | HuggingFace token from [hf.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| `OPENAI_API_KEY`        | No       | OpenAI key used as fallback. Leave blank to disable.                                   |
+| `OPENAI_MODEL`          | No       | Defaults to `gpt-4o-mini`                                                              |
