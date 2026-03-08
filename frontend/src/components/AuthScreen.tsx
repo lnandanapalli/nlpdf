@@ -4,8 +4,10 @@ import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import {
   Box, Container, Typography, TextField, Button,
   Alert, Paper, InputAdornment, IconButton, Link, useTheme,
+  Checkbox, FormControlLabel,
 } from '@mui/material';
 import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound, User } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { config } from '../config';
 
@@ -25,6 +27,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [cfToken, setCfToken] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +61,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
     if (!isLogin && password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+    if (!isLogin && !agreedToTerms) {
+      setError('You must agree to the Terms of Service and Privacy Policy');
       return;
     }
     if (!cfToken) {
@@ -124,6 +131,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setShowOTP(false);
     setConfirmPassword('');
     setShowConfirmPassword(false);
+    setAgreedToTerms(false);
     setCfToken('');
     turnstileRef.current?.reset();
   };
@@ -150,10 +158,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             <>
               <form onSubmit={handleSubmit}>
                 {!isLogin && (
-                  <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                  <>
                     <TextField
                       fullWidth label="First Name" value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
+                      sx={{ mb: 2 }}
                       slotProps={{
                         input: {
                           startAdornment: (
@@ -167,8 +176,18 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <TextField
                       fullWidth label="Last Name" value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
+                      sx={{ mb: 2 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <User size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
-                  </Box>
+                  </>
                 )}
 
                 <TextField
@@ -230,6 +249,27 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         ),
                       },
                     }}
+                  />
+                )}
+
+                {!isLogin && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" color="text.secondary">
+                        I agree to the{' '}
+                        <Link component={RouterLink} to="/terms" target="_blank" variant="body2">Terms of Service</Link>
+                        {' '}and{' '}
+                        <Link component={RouterLink} to="/privacy" target="_blank" variant="body2">Privacy Policy</Link>
+                      </Typography>
+                    }
+                    sx={{ mb: 1, alignItems: 'flex-start', '& .MuiCheckbox-root': { pt: 0.5 } }}
                   />
                 )}
 
@@ -303,6 +343,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             </>
           )}
         </Paper>
+
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ mt: 3, display: 'block' }}>
+          By continuing, you agree to our{' '}
+          <Link component={RouterLink} to="/terms" variant="caption">Terms of Service</Link>
+          {' '}and{' '}
+          <Link component={RouterLink} to="/privacy" variant="caption">Privacy Policy</Link>.
+        </Typography>
       </Container>
     </Box>
   );

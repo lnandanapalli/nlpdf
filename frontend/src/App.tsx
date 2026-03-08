@@ -5,6 +5,9 @@ import AuthScreen from './components/AuthScreen';
 import AppShell from './components/AppShell';
 import HomePage from './components/HomePage';
 import SettingsPage from './components/settings/SettingsPage';
+import TermsOfService from './components/TermsOfService';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import CookieConsent from './components/CookieConsent';
 import { validateSession, logout } from './services/api';
 
 function App() {
@@ -57,18 +60,28 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <AuthScreen onLogin={handleLogin} />;
-  }
-
   return (
-    <Routes>
-      <Route element={<AppShell onLogout={handleLogout} />}>
-        <Route index element={<HomePage />} />
-        <Route path="settings" element={<SettingsPage onAccountDeleted={handleLogout} />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        {/* Public pages — accessible regardless of auth */}
+        <Route path="terms" element={<TermsOfService />} />
+        <Route path="privacy" element={<PrivacyPolicy />} />
+
+        {/* Everything else requires authentication */}
+        {!isAuthenticated ? (
+          <Route path="*" element={<AuthScreen onLogin={handleLogin} />} />
+        ) : (
+          <>
+            <Route element={<AppShell onLogout={handleLogout} />}>
+              <Route index element={<HomePage />} />
+              <Route path="settings" element={<SettingsPage onAccountDeleted={handleLogout} />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </>
+        )}
+      </Routes>
+      <CookieConsent />
+    </>
   );
 }
 
