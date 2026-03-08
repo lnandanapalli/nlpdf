@@ -63,7 +63,7 @@ app.add_middleware(
     CORSMiddleware,  # type: ignore
     allow_origins=settings.CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT"],
     allow_headers=["Content-Type", "X-CSRF-Token"],
     expose_headers=["Content-Disposition"],
     max_age=600,

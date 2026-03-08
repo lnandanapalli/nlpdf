@@ -25,26 +25,36 @@ from backend.auth.password import hash_password, verify_password
 from backend.crud.user_crud import (
     clear_refresh_token_jti,
     create_user,
+    delete_user,
     get_user_by_email,
     increment_otp_attempts,
     mark_user_verified,
     record_failed_login,
     reset_failed_logins,
     update_refresh_token_jti,
+    update_user_name,
     update_user_otp,
+    update_user_password,
 )
 from backend.database import get_db
 from backend.models.user import User
 from backend.rate_limit import limiter
 from backend.schemas.auth_schema import (
+    ChangePasswordRequest,
+    DeleteAccountConfirmRequest,
+    DeleteAccountRequest,
     LoginRequest,
     ResendOTPRequest,
     SignupRequest,
     SuccessResponse,
+    UpdateProfileRequest,
     UserResponse,
     VerifyOTPRequest,
 )
-from backend.services.email_service import send_otp_email
+from backend.services.email_service import (
+    send_account_deletion_otp_email,
+    send_otp_email,
+)
 from backend.services.turnstile_service import verify_turnstile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -80,11 +90,15 @@ async def signup(
             # Reusing unverified account
             hashed = hash_password(body.password)
             existing.hashed_password = hashed
+            existing.first_name = body.first_name
+            existing.last_name = body.last_name
             await db.commit()
             user = existing
     else:
         hashed = hash_password(body.password)
-        user = await create_user(db, body.email, hashed)
+        user = await create_user(
+            db, body.email, hashed, body.first_name, body.last_name
+        )
 
     otp_code = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -310,3 +324,118 @@ async def logout(
 async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Return the currently authenticated user."""
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    body: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Update the current user's profile information."""
+    await update_user_name(db, current_user, body.first_name, body.last_name)
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", response_model=SuccessResponse)
+async def change_password(
+    body: ChangePasswordRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SuccessResponse:
+    """Change the current user's password. Invalidates other sessions."""
+    if not verify_password(body.current_password, str(current_user.hashed_password)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if body.current_password == body.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password",
+        )
+
+    hashed = hash_password(body.new_password)
+    await update_user_password(db, current_user, hashed)
+
+    # Re-issue tokens for current session; old JTI is overwritten so other sessions
+    # will fail to refresh (effectively logging them out).
+    access = create_access_token({"sub": current_user.email})
+    refresh_tok, jti = create_refresh_token({"sub": current_user.email})
+    await update_refresh_token_jti(db, current_user, jti)
+    set_auth_cookies(response, access, refresh_tok)
+
+    return SuccessResponse(message="Password changed successfully")
+
+
+@router.post("/delete-account/request", response_model=SuccessResponse)
+@limiter.limit("3/10minutes")
+async def request_account_deletion(
+    request: Request,
+    body: DeleteAccountRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SuccessResponse:
+    """Verify password and send an OTP to confirm account deletion."""
+    if not verify_password(body.password, str(current_user.hashed_password)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is incorrect",
+        )
+
+    otp_code = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    await update_user_otp(db, current_user, otp_code, expires_at)
+
+    background_tasks.add_task(
+        send_account_deletion_otp_email, str(current_user.email), otp_code
+    )
+
+    return SuccessResponse(message="Confirmation code sent to your email")
+
+
+@router.post("/delete-account/confirm", response_model=SuccessResponse)
+async def confirm_account_deletion(
+    body: DeleteAccountConfirmRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SuccessResponse:
+    """Confirm account deletion by verifying the OTP code."""
+    if current_user.otp_code is None or current_user.otp_expires_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active confirmation code. Please request account deletion first.",
+        )
+
+    if (current_user.otp_attempts or 0) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Please request a new code.",
+        )
+
+    expires_at = (
+        current_user.otp_expires_at.replace(tzinfo=timezone.utc)
+        if current_user.otp_expires_at.tzinfo is None
+        else current_user.otp_expires_at
+    )
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation code has expired. Please request a new one.",
+        )
+
+    if current_user.otp_code != body.otp_code:
+        await increment_otp_attempts(db, current_user)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid confirmation code",
+        )
+
+    await delete_user(db, current_user)
+    clear_auth_cookies(response)
+
+    return SuccessResponse(message="Account deleted successfully")

@@ -116,6 +116,42 @@ export async function logout(): Promise<void> {
   }
 }
 
+export interface UserData {
+  id: number;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  created_at: string | null;
+}
+
+export async function fetchCurrentUser(): Promise<UserData> {
+  const response = await api.get<UserData>('/auth/me');
+  return response.data;
+}
+
+export async function updateProfile(firstName: string, lastName: string): Promise<UserData> {
+  const response = await api.put<UserData>('/auth/profile', {
+    first_name: firstName,
+    last_name: lastName,
+  });
+  return response.data;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await api.post('/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
+export async function requestAccountDeletion(password: string): Promise<void> {
+  await api.post('/auth/delete-account/request', { password });
+}
+
+export async function confirmAccountDeletion(otpCode: string): Promise<void> {
+  await api.post('/auth/delete-account/confirm', { otp_code: otpCode });
+}
+
 export interface ProcessPDFResponse {
   blob: Blob;
   filename: string;

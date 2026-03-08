@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
@@ -57,15 +58,22 @@ def _mock_turnstile():
 
 @pytest.fixture(autouse=True)
 def _mock_email():
-    """Replace the real Resend email call with a no-op."""
-    with patch(
-        "backend.routers.auth_router.send_otp_email",
-        new=MagicMock(),
+    """Replace the real Resend email calls with no-ops."""
+    with (
+        patch(
+            "backend.routers.auth_router.send_otp_email",
+            new=MagicMock(),
+        ),
+        patch(
+            "backend.routers.auth_router.send_account_deletion_otp_email",
+            new=MagicMock(),
+        ),
     ):
         yield
 
 
 CF_TOKEN = "test-token"
+SIGNUP_NAMES = {"first_name": "Test", "last_name": "User"}
 
 
 @pytest.fixture(autouse=True)
@@ -95,13 +103,21 @@ def _extract_cookies(response) -> dict[str, str]:
     return cookies
 
 
+def _signup_payload(email, password, **overrides):
+    """Build a signup JSON payload with names and cf_token."""
+    return {
+        "email": email,
+        "password": password,
+        **SIGNUP_NAMES,
+        "cf_token": CF_TOKEN,
+        **overrides,
+    }
+
+
 async def _create_verified_user_and_get_cookies(client, email, password):
     """Helper: signup, verify OTP, return cookies dict from verify_otp response."""
     # 1. Signup
-    await client.post(
-        "/auth/signup",
-        json={"email": email, "password": password, "cf_token": CF_TOKEN},
-    )
+    await client.post("/auth/signup", json=_signup_payload(email, password))
 
     # 2. Extract OTP from DB
     async with TestSessionLocal() as db:
@@ -125,11 +141,7 @@ class TestSignup:
     async def test_signup_returns_success(self, client):
         resp = await client.post(
             "/auth/signup",
-            json={
-                "email": "new@example.com",
-                "password": "securepass123",
-                "cf_token": CF_TOKEN,
-            },
+            json=_signup_payload("new@example.com", "securepass123"),
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -137,26 +149,47 @@ class TestSignup:
         assert "Verification code sent" in data["message"]
 
     async def test_signup_duplicate_email_returns_409_if_verified(self, client):
-        payload = {"email": "dupe@example.com", "password": "securepass123"}
         await _create_verified_user_and_get_cookies(
-            client, payload["email"], payload["password"]
+            client, "dupe@example.com", "securepass123"
         )
 
         resp2 = await client.post(
-            "/auth/signup", json={**payload, "cf_token": CF_TOKEN}
+            "/auth/signup",
+            json=_signup_payload("dupe@example.com", "securepass123"),
         )
         assert resp2.status_code == 409
 
     async def test_signup_short_password_returns_422(self, client):
         resp = await client.post(
             "/auth/signup",
+            json=_signup_payload("short@example.com", "short"),
+        )
+        assert resp.status_code == 422
+
+    async def test_signup_without_names_returns_422(self, client):
+        resp = await client.post(
+            "/auth/signup",
             json={
-                "email": "short@example.com",
-                "password": "short",
+                "email": "noname@example.com",
+                "password": "securepass123",
                 "cf_token": CF_TOKEN,
             },
         )
         assert resp.status_code == 422
+
+    async def test_signup_stores_names(self, client):
+        await client.post(
+            "/auth/signup",
+            json=_signup_payload("named@example.com", "securepass123"),
+        )
+        async with TestSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.email == "named@example.com")
+            )
+            user = result.scalars().first()
+            assert user is not None
+            assert user.first_name == "Test"
+            assert user.last_name == "User"
 
 
 class TestOTP:
@@ -164,10 +197,7 @@ class TestOTP:
 
     async def test_verify_otp_sets_cookies(self, client):
         email = "otp@example.com"
-        await client.post(
-            "/auth/signup",
-            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
-        )
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
         async with TestSessionLocal() as db:
             result = await db.execute(select(User).where(User.email == email))
@@ -190,10 +220,7 @@ class TestOTP:
 
     async def test_verify_otp_invalid_code(self, client):
         email = "badotp@example.com"
-        await client.post(
-            "/auth/signup",
-            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
-        )
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
         resp = await client.post(
             "/auth/verify_otp", json={"email": email, "otp_code": "000000"}
@@ -202,10 +229,7 @@ class TestOTP:
 
     async def test_resend_otp_success(self, client):
         email = "resend@example.com"
-        await client.post(
-            "/auth/signup",
-            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
-        )
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
         resp = await client.post("/auth/resend_otp", json={"email": email})
         assert resp.status_code == 200
@@ -241,11 +265,7 @@ class TestLogin:
     async def test_login_unverified_user_returns_403(self, client):
         await client.post(
             "/auth/signup",
-            json={
-                "email": "unverified@example.com",
-                "password": "securepass123",
-                "cf_token": CF_TOKEN,
-            },
+            json=_signup_payload("unverified@example.com", "securepass123"),
         )
 
         resp = await client.post(
@@ -291,6 +311,8 @@ class TestMe:
         data = resp.json()
         assert data["email"] == "me@example.com"
         assert "id" in data
+        assert data["first_name"] == "Test"
+        assert data["last_name"] == "User"
 
     async def test_me_without_cookie_returns_401(self, client):
         resp = await client.get("/auth/me")
@@ -336,7 +358,6 @@ class TestRefresh:
 
     async def test_refresh_with_expired_token_returns_401(self, client):
         import jwt as pyjwt
-        from datetime import datetime, timezone
 
         from backend.config import settings
 
@@ -392,6 +413,238 @@ class TestLogout:
 
     async def test_logout_without_cookie_returns_401(self, client):
         resp = await client.post("/auth/logout")
+        assert resp.status_code == 401
+
+
+class TestUpdateProfile:
+    """Tests for PUT /auth/profile."""
+
+    async def test_update_profile_success(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "profile@example.com", "securepass123"
+        )
+
+        resp = await client.put(
+            "/auth/profile",
+            json={"first_name": "New", "last_name": "Name"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["first_name"] == "New"
+        assert data["last_name"] == "Name"
+
+    async def test_update_profile_unauthenticated(self, client):
+        resp = await client.put(
+            "/auth/profile",
+            json={"first_name": "New", "last_name": "Name"},
+        )
+        assert resp.status_code == 401
+
+    async def test_update_profile_empty_names_returns_422(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "empty@example.com", "securepass123"
+        )
+
+        resp = await client.put(
+            "/auth/profile",
+            json={"first_name": "", "last_name": "Name"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 422
+
+
+class TestChangePassword:
+    """Tests for POST /auth/change-password."""
+
+    async def test_change_password_success(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "chpw@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "securepass123",
+                "new_password": "newsecurepass456",
+            },
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "Password changed successfully"
+
+        # Verify login with new password works
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": "chpw@example.com",
+                "password": "newsecurepass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert login_resp.status_code == 200
+
+    async def test_change_password_wrong_current(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "wrongpw@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "wrongpassword",
+                "new_password": "newsecurepass456",
+            },
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+        assert "incorrect" in resp.json()["detail"].lower()
+
+    async def test_change_password_same_as_current(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "samepw@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/change-password",
+            json={"current_password": "securepass123", "new_password": "securepass123"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+        assert "different" in resp.json()["detail"].lower()
+
+    async def test_change_password_unauthenticated(self, client):
+        resp = await client.post(
+            "/auth/change-password",
+            json={
+                "current_password": "securepass123",
+                "new_password": "newsecurepass456",
+            },
+        )
+        assert resp.status_code == 401
+
+
+class TestDeleteAccount:
+    """Tests for POST /auth/delete-account/request and /auth/delete-account/confirm."""
+
+    async def test_delete_account_full_flow(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "delete@example.com", "securepass123"
+        )
+
+        # Step 1: Request deletion
+        resp = await client.post(
+            "/auth/delete-account/request",
+            json={"password": "securepass123"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 200
+        assert "Confirmation code" in resp.json()["message"]
+
+        # Extract OTP from DB
+        async with TestSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.email == "delete@example.com")
+            )
+            user = result.scalars().first()
+            assert user is not None
+            otp_code = user.otp_code
+
+        # Step 2: Confirm deletion
+        resp = await client.post(
+            "/auth/delete-account/confirm",
+            json={"otp_code": otp_code},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 200
+        assert "deleted" in resp.json()["message"].lower()
+
+        # Verify user is gone
+        async with TestSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.email == "delete@example.com")
+            )
+            user = result.scalars().first()
+            assert user is None
+
+    async def test_delete_account_wrong_password(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "delbadpw@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/delete-account/request",
+            json={"password": "wrongpassword"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+
+    async def test_delete_account_wrong_otp(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "delbadotp@example.com", "securepass123"
+        )
+
+        # Request deletion
+        await client.post(
+            "/auth/delete-account/request",
+            json={"password": "securepass123"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+
+        # Confirm with wrong OTP
+        resp = await client.post(
+            "/auth/delete-account/confirm",
+            json={"otp_code": "000000"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+
+    async def test_delete_account_no_active_otp(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "delnootp@example.com", "securepass123"
+        )
+
+        resp = await client.post(
+            "/auth/delete-account/confirm",
+            json={"otp_code": "123456"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+
+    async def test_delete_account_expired_otp(self, client):
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "delexp@example.com", "securepass123"
+        )
+
+        # Request deletion
+        await client.post(
+            "/auth/delete-account/request",
+            json={"password": "securepass123"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+
+        # Manually expire the OTP
+        async with TestSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.email == "delexp@example.com")
+            )
+            user = result.scalars().first()
+            assert user is not None
+            user.otp_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+            await db.commit()
+
+        resp = await client.post(
+            "/auth/delete-account/confirm",
+            json={"otp_code": "123456"},
+            cookies={"access_token": cookies["access_token"]},
+        )
+        assert resp.status_code == 400
+
+    async def test_delete_account_unauthenticated(self, client):
+        resp = await client.post(
+            "/auth/delete-account/request",
+            json={"password": "securepass123"},
+        )
         assert resp.status_code == 401
 
 

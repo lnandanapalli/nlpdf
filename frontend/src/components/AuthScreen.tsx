@@ -5,7 +5,7 @@ import {
   Box, Container, Typography, TextField, Button,
   Alert, Paper, InputAdornment, IconButton, Link, useTheme,
 } from '@mui/material';
-import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound, User } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
 import { config } from '../config';
 
@@ -17,6 +17,8 @@ interface AuthScreenProps {
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [isLogin, setIsLogin] = useState(true);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,6 +52,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       setError('Please fill in all fields');
       return;
     }
+    if (!isLogin && (!firstName.trim() || !lastName.trim())) {
+      setError('Please fill in all fields');
+      return;
+    }
     if (!isLogin && password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -65,7 +71,9 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         await axios.post(`${API_BASE_URL}/auth/login`, { email, password, cf_token: cfToken }, { withCredentials: true });
         onLogin();
       } else {
-        await axios.post(`${API_BASE_URL}/auth/signup`, { email, password, cf_token: cfToken });
+        await axios.post(`${API_BASE_URL}/auth/signup`, {
+          email, password, first_name: firstName.trim(), last_name: lastName.trim(), cf_token: cfToken,
+        });
         setSuccess('Verification code sent to your email.');
         setShowOTP(true);
       }
@@ -109,6 +117,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const switchMode = () => {
     setIsLogin(!isLogin);
+    setFirstName('');
+    setLastName('');
     setError('');
     setSuccess('');
     setShowOTP(false);
@@ -139,6 +149,28 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           {!showOTP ? (
             <>
               <form onSubmit={handleSubmit}>
+                {!isLogin && (
+                  <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                    <TextField
+                      fullWidth label="First Name" value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <User size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <TextField
+                      fullWidth label="Last Name" value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </Box>
+                )}
+
                 <TextField
                   fullWidth label="Email" type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}

@@ -10,6 +10,8 @@ class SignupRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
     cf_token: str
 
 
@@ -26,6 +28,8 @@ class UserResponse(BaseModel):
 
     id: int
     email: str
+    first_name: str | None = None
+    last_name: str | None = None
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -48,3 +52,29 @@ class SuccessResponse(BaseModel):
     """Generic success message response."""
 
     message: str
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update user profile (name)."""
+
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request to change password."""
+
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request to initiate account deletion (step 1: verify password, send OTP)."""
+
+    password: str
+
+
+class DeleteAccountConfirmRequest(BaseModel):
+    """Request to confirm account deletion (step 2: verify OTP)."""
+
+    otp_code: str

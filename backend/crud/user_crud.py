@@ -14,9 +14,20 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     return result.scalars().first()
 
 
-async def create_user(db: AsyncSession, email: str, hashed_password: str) -> User:
+async def create_user(
+    db: AsyncSession,
+    email: str,
+    hashed_password: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> User:
     """Create a new user and flush to get the generated id."""
-    user = User(email=email, hashed_password=hashed_password)
+    user = User(
+        email=email,
+        hashed_password=hashed_password,
+        first_name=first_name,
+        last_name=last_name,
+    )
     db.add(user)
     await db.flush()
     await db.refresh(user)
@@ -85,3 +96,28 @@ async def clear_refresh_token_jti(db: AsyncSession, user: User) -> None:
     user.refresh_token_jti = None
     await db.commit()
     await db.refresh(user)
+
+
+async def update_user_name(
+    db: AsyncSession, user: User, first_name: str, last_name: str
+) -> None:
+    """Update the user's first and last name."""
+    user.first_name = first_name
+    user.last_name = last_name
+    await db.commit()
+    await db.refresh(user)
+
+
+async def update_user_password(
+    db: AsyncSession, user: User, hashed_password: str
+) -> None:
+    """Update the user's hashed password."""
+    user.hashed_password = hashed_password
+    await db.commit()
+    await db.refresh(user)
+
+
+async def delete_user(db: AsyncSession, user: User) -> None:
+    """Delete a user and all associated data (cascade handles documents)."""
+    await db.delete(user)
+    await db.commit()
