@@ -18,6 +18,8 @@ config = context.config
 
 # Alembic requires a synchronous connection URL.
 # Build the sync URL using mssql+pyodbc:// from the same DB settings.
+_trust_cert = "yes" if settings.APP_ENV == "development" else "no"
+
 _sync_url = URL.create(
     drivername="mssql+pyodbc",
     username=settings.DB_USER,
@@ -28,7 +30,7 @@ _sync_url = URL.create(
     query={
         "driver": settings.DB_DRIVER,
         "Encrypt": "yes",
-        "TrustServerCertificate": "no",
+        "TrustServerCertificate": _trust_cert,
         "Connection Timeout": "30",
     },
 )

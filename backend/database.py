@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from backend.config import settings
 
+_trust_cert = "yes" if settings.APP_ENV == "development" else "no"
+
 database_url = URL.create(
     drivername="mssql+aioodbc",
     username=settings.DB_USER,
@@ -17,7 +19,7 @@ database_url = URL.create(
     query={
         "driver": settings.DB_DRIVER,
         "Encrypt": "yes",
-        "TrustServerCertificate": "no",
+        "TrustServerCertificate": _trust_cert,
         "Connection Timeout": "30",
     },
 )
