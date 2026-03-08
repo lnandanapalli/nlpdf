@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import AuthScreen from './components/AuthScreen';
 import AppShell from './components/AppShell';
@@ -13,11 +13,13 @@ import { validateSession, logout } from './services/api';
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const navigate = useNavigate();
 
   const handleLogout = useCallback(async () => {
     await logout();
     setIsAuthenticated(false);
-  }, []);
+    navigate('/', { replace: true });
+  }, [navigate]);
 
   const handleLogin = () => {
     setIsAuthenticated(true);

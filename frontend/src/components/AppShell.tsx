@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Button as MuiButton, useTheme } from '@mui/material';
 import { Sparkles } from 'lucide-react';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -19,7 +19,14 @@ export default function AppShell({ onLogout }: AppShellProps) {
         sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default' }}
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            component={Link}
+            to="/"
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 1.5,
+              textDecoration: 'none', color: 'inherit',
+            }}
+          >
             <Sparkles color={theme.palette.primary.main} size={24} />
             <Typography variant="h6" color="primary.main" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
               NLPDF

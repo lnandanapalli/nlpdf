@@ -1,13 +1,15 @@
 import { Box, Container, Typography, Paper, Link as MuiLink } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 export default function PrivacyPolicy() {
+  const navigate = useNavigate();
+
   return (
     <Box sx={{ minHeight: '100dvh', py: 6, px: 2, bgcolor: 'background.default' }}>
       <Container maxWidth="md">
         <MuiLink
-          component={Link} to="/" underline="hover"
+          component="button" underline="hover" onClick={() => navigate(-1)}
           sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 3, color: 'text.secondary' }}
         >
           <ArrowLeft size={16} /> Back
