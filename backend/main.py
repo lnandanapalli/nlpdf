@@ -12,12 +12,15 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.config import settings
+from backend.database import get_db
 from backend.logging import setup_logging
 from backend.rate_limit import limiter
 from backend.routers.llm_router import router as llm_router
@@ -49,11 +52,27 @@ def _cleanup_old_uploads(max_age_seconds: int = 3600) -> None:
         logger.info("startup_cleanup", removed=removed)
 
 
+async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
+    """Background task to clean up old uploads periodically."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            _cleanup_old_uploads()
+        except Exception:
+            logger.exception("periodic_cleanup_error")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application startup/shutdown lifecycle."""
     _cleanup_old_uploads()
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="NLPDF API", version="0.2.0", lifespan=lifespan)
@@ -108,6 +127,20 @@ async def csrf_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.APP_ENV != "development":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
 app.include_router(llm_router)
 app.include_router(auth_router)
 
@@ -118,5 +151,10 @@ def root() -> dict[str, str]:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    from sqlalchemy import text
+
+    await db.execute(text("SELECT 1"))
     return {"status": "healthy"}

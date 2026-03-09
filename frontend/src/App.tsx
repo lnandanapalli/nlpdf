@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
+import ErrorBoundary from './components/ErrorBoundary';
 import AuthScreen from './components/AuthScreen';
 import AppShell from './components/AppShell';
 import HomePage from './components/HomePage';
-import SettingsPage from './components/settings/SettingsPage';
+import SettingsLayout from './components/settings/SettingsLayout';
+import ProfileSettings from './components/settings/ProfileSettings';
+import SecuritySettings from './components/settings/SecuritySettings';
 import TermsOfService from './components/TermsOfService';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import CookieConsent from './components/CookieConsent';
@@ -63,7 +66,7 @@ function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         {/* Public pages — accessible regardless of auth */}
         <Route path="terms" element={<TermsOfService />} />
@@ -76,14 +79,18 @@ function App() {
           <>
             <Route element={<AppShell onLogout={handleLogout} />}>
               <Route index element={<HomePage />} />
-              <Route path="settings" element={<SettingsPage onAccountDeleted={handleLogout} />} />
+              <Route path="settings" element={<SettingsLayout />}>
+                <Route index element={<Navigate to="profile" replace />} />
+                <Route path="profile" element={<ProfileSettings />} />
+                <Route path="security" element={<SecuritySettings onAccountDeleted={handleLogout} />} />
+              </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         )}
       </Routes>
       <CookieConsent />
-    </>
+    </ErrorBoundary>
   );
 }
 

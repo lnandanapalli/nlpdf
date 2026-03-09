@@ -161,6 +161,7 @@ export default function CommandInput({ onProcess, disabled, hasFiles }: CommandI
                     type="submit"
                     disabled={!canSubmit}
                     color="primary"
+                    aria-label="Send command"
                     sx={{
                       bgcolor: canSubmit ? 'primary.main' : 'action.disabledBackground',
                       color: canSubmit ? 'background.default' : 'text.disabled',

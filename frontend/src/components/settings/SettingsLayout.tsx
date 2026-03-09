@@ -1,33 +1,27 @@
-import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Container, List, ListItemButton, ListItemIcon, ListItemText,
   Paper, Typography, IconButton, useMediaQuery, useTheme, Link,
 } from '@mui/material';
 import { User, Shield, ArrowLeft } from 'lucide-react';
-import ProfileSettings from './ProfileSettings';
-import SecuritySettings from './SecuritySettings';
 
-type Section = 'profile' | 'security';
+const sections = [
+  { id: 'profile', label: 'Profile', icon: <User size={20} /> },
+  { id: 'security', label: 'Security', icon: <Shield size={20} /> },
+];
 
-interface SettingsPageProps {
-  onAccountDeleted: () => void;
-}
-
-export default function SettingsPage({ onAccountDeleted }: SettingsPageProps) {
-  const [activeSection, setActiveSection] = useState<Section>('profile');
+export default function SettingsLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-  const sections = [
-    { id: 'profile' as Section, label: 'Profile', icon: <User size={20} /> },
-    { id: 'security' as Section, label: 'Security', icon: <Shield size={20} /> },
-  ];
+  const segments = pathname.split('/').filter(Boolean);
+  const activeId = segments.length > 1 ? segments[segments.length - 1] : 'profile';
 
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Scrollable settings content */}
+      {/* Scrollable content */}
       <Box sx={{ flex: 1, overflow: 'auto', py: { xs: 2, md: 4 }, px: { xs: 2, md: 0 } }}>
         <Container maxWidth="md">
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -44,8 +38,8 @@ export default function SettingsPage({ onAccountDeleted }: SettingsPageProps) {
                 {sections.map((s) => (
                   <ListItemButton
                     key={s.id}
-                    selected={activeSection === s.id}
-                    onClick={() => setActiveSection(s.id)}
+                    selected={activeId === s.id}
+                    onClick={() => navigate(`/settings/${s.id}`, { replace: true })}
                     sx={{ borderRadius: 1.5 }}
                   >
                     <ListItemIcon sx={{ minWidth: 36 }}>{s.icon}</ListItemIcon>
@@ -55,10 +49,9 @@ export default function SettingsPage({ onAccountDeleted }: SettingsPageProps) {
               </List>
             </Paper>
 
-            {/* Content */}
+            {/* Active section rendered by React Router */}
             <Box sx={{ flex: 1 }}>
-              {activeSection === 'profile' && <ProfileSettings />}
-              {activeSection === 'security' && <SecuritySettings onAccountDeleted={onAccountDeleted} />}
+              <Outlet />
             </Box>
           </Box>
         </Container>
@@ -75,4 +68,3 @@ export default function SettingsPage({ onAccountDeleted }: SettingsPageProps) {
     </Box>
   );
 }
-

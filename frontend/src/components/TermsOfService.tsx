@@ -1,15 +1,20 @@
 import { Box, Container, Typography, Paper, Link as MuiLink } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import Section from './Section';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
+  const handleBack = () => {
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate('/');
+  };
 
   return (
     <Box sx={{ minHeight: '100dvh', py: 6, px: 2, bgcolor: 'background.default' }}>
       <Container maxWidth="md">
         <MuiLink
-          component="button" underline="hover" onClick={() => navigate(-1)}
+          component="button" underline="hover" onClick={handleBack}
           sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 3, color: 'text.secondary' }}
         >
           <ArrowLeft size={16} /> Back
@@ -109,13 +114,3 @@ export default function TermsOfService() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>{title}</Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-        {children}
-      </Typography>
-    </Box>
-  );
-}

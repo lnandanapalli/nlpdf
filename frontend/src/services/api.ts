@@ -152,6 +152,40 @@ export async function confirmAccountDeletion(otpCode: string): Promise<void> {
   await api.post('/auth/delete-account/confirm', { otp_code: otpCode });
 }
 
+// --- Auth API ---
+
+export async function login(email: string, password: string, cfToken: string): Promise<void> {
+  await api.post('/auth/login', { email, password, cf_token: cfToken });
+}
+
+export async function signup(
+  email: string, password: string, firstName: string, lastName: string, cfToken: string,
+): Promise<void> {
+  await api.post('/auth/signup', {
+    email, password, first_name: firstName, last_name: lastName, cf_token: cfToken,
+  });
+}
+
+export async function verifyOtp(email: string, otpCode: string): Promise<void> {
+  await api.post('/auth/verify_otp', { email, otp_code: otpCode });
+}
+
+export async function resendOtp(email: string): Promise<void> {
+  await api.post('/auth/resend_otp', { email });
+}
+
+// --- Error Handling ---
+
+export function extractErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err) && err.response?.data?.detail) {
+    const { detail } = err.response.data;
+    return typeof detail === 'string' ? detail : fallback;
+  }
+  return fallback;
+}
+
+// --- PDF Processing ---
+
 export interface ProcessPDFResponse {
   blob: Blob;
   filename: string;

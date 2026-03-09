@@ -1,23 +1,16 @@
 import { useState } from 'react';
-import axios from 'axios';
 import {
   Box, TextField, Button, Alert, Paper, Typography,
   Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
   InputAdornment, IconButton,
 } from '@mui/material';
 import { Eye, EyeOff } from 'lucide-react';
-import { changePassword, requestAccountDeletion, confirmAccountDeletion } from '../../services/api';
+import {
+  changePassword, requestAccountDeletion, confirmAccountDeletion, extractErrorMessage,
+} from '../../services/api';
 
 interface SecuritySettingsProps {
   onAccountDeleted: () => void;
-}
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err) && err.response?.data?.detail) {
-    const { detail } = err.response.data;
-    return typeof detail === 'string' ? detail : fallback;
-  }
-  return fallback;
 }
 
 export default function SecuritySettings({ onAccountDeleted }: SecuritySettingsProps) {
@@ -64,7 +57,7 @@ export default function SecuritySettings({ onAccountDeleted }: SecuritySettingsP
       setNewPassword('');
       setConfirmPw('');
     } catch (err) {
-      setPwError(getErrorMessage(err, 'Failed to change password. Please try again.'));
+      setPwError(extractErrorMessage(err, 'Failed to change password. Please try again.'));
     } finally {
       setPwLoading(false);
     }
@@ -82,7 +75,7 @@ export default function SecuritySettings({ onAccountDeleted }: SecuritySettingsP
       await requestAccountDeletion(deletePassword);
       setDeleteStep('otp');
     } catch (err) {
-      setDeleteError(getErrorMessage(err, 'Failed to initiate account deletion.'));
+      setDeleteError(extractErrorMessage(err, 'Failed to initiate account deletion.'));
     } finally {
       setDeleteLoading(false);
     }
@@ -100,7 +93,7 @@ export default function SecuritySettings({ onAccountDeleted }: SecuritySettingsP
       await confirmAccountDeletion(deleteOtp);
       onAccountDeleted();
     } catch (err) {
-      setDeleteError(getErrorMessage(err, 'Failed to delete account.'));
+      setDeleteError(extractErrorMessage(err, 'Failed to delete account.'));
     } finally {
       setDeleteLoading(false);
     }
@@ -116,7 +109,7 @@ export default function SecuritySettings({ onAccountDeleted }: SecuritySettingsP
 
   const passwordToggle = (show: boolean, setShow: (v: boolean) => void) => (
     <InputAdornment position="end">
-      <IconButton onClick={() => setShow(!show)} edge="end" size="small">
+      <IconButton onClick={() => setShow(!show)} edge="end" size="small" aria-label={show ? 'Hide password' : 'Show password'}>
         {show ? <EyeOff size={18} /> : <Eye size={18} />}
       </IconButton>
     </InputAdornment>

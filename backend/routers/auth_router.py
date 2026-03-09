@@ -3,6 +3,8 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import structlog
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -56,6 +58,8 @@ from backend.services.email_service import (
     send_otp_email,
 )
 from backend.services.turnstile_service import verify_turnstile
+
+logger = structlog.get_logger("nlpdf.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -334,6 +338,7 @@ async def update_profile(
 ) -> UserResponse:
     """Update the current user's profile information."""
     await update_user_name(db, current_user, body.first_name, body.last_name)
+    logger.info("profile_updated", user_id=current_user.id)
     return UserResponse.model_validate(current_user)
 
 
@@ -359,6 +364,7 @@ async def change_password(
 
     hashed = hash_password(body.new_password)
     await update_user_password(db, current_user, hashed)
+    logger.info("password_changed", user_id=current_user.id)
 
     # Re-issue tokens for current session; old JTI is overwritten so other sessions
     # will fail to refresh (effectively logging them out).
@@ -435,7 +441,9 @@ async def confirm_account_deletion(
             detail="Invalid confirmation code",
         )
 
+    user_id = current_user.id
     await delete_user(db, current_user)
     clear_auth_cookies(response)
+    logger.info("account_deleted", user_id=user_id)
 
     return SuccessResponse(message="Account deleted successfully")

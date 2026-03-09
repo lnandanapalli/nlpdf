@@ -18,9 +18,14 @@ export default function ProfileMenu({ onLogout }: ProfileMenuProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCurrentUser()
-      .then(setUser)
-      .catch(() => setUser(null));
+    const loadUser = () => {
+      fetchCurrentUser()
+        .then(setUser)
+        .catch(() => setUser(null));
+    };
+    loadUser();
+    window.addEventListener('profile-updated', loadUser);
+    return () => window.removeEventListener('profile-updated', loadUser);
   }, []);
 
   const initials = user
@@ -37,6 +42,7 @@ export default function ProfileMenu({ onLogout }: ProfileMenuProps) {
         onClick={(e) => setAnchorEl(e.currentTarget)}
         size="small"
         sx={{ ml: 1 }}
+        aria-label="Account menu"
       >
         <Avatar
           sx={{

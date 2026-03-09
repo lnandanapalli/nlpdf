@@ -1,5 +1,4 @@
 import { useRef, useState, type SubmitEvent } from 'react';
-import axios from 'axios';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import {
   Box, Container, Typography, TextField, Button,
@@ -8,7 +7,9 @@ import {
 } from '@mui/material';
 import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound, User } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
-import { API_BASE_URL } from '../services/api';
+import {
+  login as apiLogin, signup as apiSignup, verifyOtp, resendOtp, extractErrorMessage,
+} from '../services/api';
 import { config } from '../config';
 
 const TURNSTILE_SITE_KEY = config.turnstileSiteKey;
@@ -38,12 +39,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const iconColor = theme.palette.text.secondary;
 
   const handleError = (err: unknown, defaultMessage: string) => {
-    if (axios.isAxiosError(err) && err.response?.data?.detail) {
-      const { detail } = err.response.data;
-      setError(typeof detail === 'string' ? detail : JSON.stringify(detail));
-    } else {
-      setError(defaultMessage);
-    }
+    setError(extractErrorMessage(err, defaultMessage));
   };
 
   const handleSubmit = async (e: SubmitEvent) => {
@@ -75,12 +71,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setLoading(true);
     try {
       if (isLogin) {
-        await axios.post(`${API_BASE_URL}/auth/login`, { email, password, cf_token: cfToken }, { withCredentials: true });
+        await apiLogin(email, password, cfToken);
         onLogin();
       } else {
-        await axios.post(`${API_BASE_URL}/auth/signup`, {
-          email, password, first_name: firstName.trim(), last_name: lastName.trim(), cf_token: cfToken,
-        });
+        await apiSignup(email, password, firstName.trim(), lastName.trim(), cfToken);
         setSuccess('Verification code sent to your email.');
         setShowOTP(true);
       }
@@ -99,7 +93,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     try {
-      await axios.post(`${API_BASE_URL}/auth/verify_otp`, { email, otp_code: otpCode }, { withCredentials: true });
+      await verifyOtp(email, otpCode);
       onLogin();
     } catch (err) {
       handleError(err, 'Verification failed. Please check the code and try again.');
@@ -113,7 +107,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     try {
-      await axios.post(`${API_BASE_URL}/auth/resend_otp`, { email });
+      await resendOtp(email);
       setSuccess('A new verification code has been sent to your email.');
     } catch (err) {
       handleError(err, 'Failed to resend verification code.');
@@ -218,7 +212,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                       ),
                       endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" aria-label={showPassword ? 'Hide password' : 'Show password'}>
                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                           </IconButton>
                         </InputAdornment>
@@ -242,7 +236,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                         ),
                         endAdornment: (
                           <InputAdornment position="end">
-                            <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small">
+                            <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}>
                               {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </IconButton>
                           </InputAdornment>
@@ -343,13 +337,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             </>
           )}
         </Paper>
-
-        <Typography variant="caption" color="text.secondary" align="center" sx={{ mt: 3, display: 'block' }}>
-          By continuing, you agree to our{' '}
-          <Link component={RouterLink} to="/terms" variant="caption">Terms of Service</Link>
-          {' '}and{' '}
-          <Link component={RouterLink} to="/privacy" variant="caption">Privacy Policy</Link>.
-        </Typography>
       </Container>
     </Box>
   );

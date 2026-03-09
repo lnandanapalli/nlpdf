@@ -15,7 +15,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Ownership
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id"), index=True)
     owner = relationship("User", back_populates="documents")
 
     # Metadata
@@ -27,4 +27,4 @@ class Document(Base):
     output_size_mb = Column(String, nullable=True)
     page_count = Column(Integer, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

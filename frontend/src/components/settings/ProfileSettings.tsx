@@ -1,21 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Alert, Paper, Typography } from '@mui/material';
+import { Box, TextField, Button, Alert, Paper, Typography, Skeleton } from '@mui/material';
 import { fetchCurrentUser, updateProfile } from '../../services/api';
 
 export default function ProfileSettings() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [fetching, setFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchCurrentUser().then((user) => {
-      setFirstName(user.first_name || '');
-      setLastName(user.last_name || '');
-      setEmail(user.email);
-    });
+    fetchCurrentUser()
+      .then((user) => {
+        setFirstName(user.first_name || '');
+        setLastName(user.last_name || '');
+        setEmail(user.email);
+      })
+      .catch(() => setError('Failed to load profile'))
+      .finally(() => setFetching(false));
   }, []);
 
   const handleSave = async () => {
@@ -29,6 +33,7 @@ export default function ProfileSettings() {
     try {
       await updateProfile(firstName.trim(), lastName.trim());
       setSuccess('Profile updated successfully');
+      window.dispatchEvent(new Event('profile-updated'));
     } catch {
       setError('Failed to update profile. Please try again.');
     } finally {
@@ -41,31 +46,41 @@ export default function ProfileSettings() {
       <Typography variant="h6" sx={{ mb: 2 }}>Profile</Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <TextField label="Email" value={email} disabled fullWidth />
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <TextField
-            label="First Name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="Last Name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            fullWidth
-          />
+      {fetching ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Skeleton variant="rounded" height={56} />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Skeleton variant="rounded" height={56} sx={{ flex: 1 }} />
+            <Skeleton variant="rounded" height={56} sx={{ flex: 1 }} />
+          </Box>
         </Box>
-        <Button
-          variant="contained"
-          onClick={handleSave}
-          disabled={loading}
-          sx={{ alignSelf: 'flex-start' }}
-        >
-          {loading ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </Box>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField label="Email" value={email} disabled fullWidth />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="First Name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Last Name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              fullWidth
+            />
+          </Box>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={loading}
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            {loading ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </Box>
+      )}
     </Paper>
   );
 }

@@ -38,6 +38,7 @@ export default function AppShell({ onLogout }: AppShellProps) {
               sx={{ color: 'text.secondary' }}
               href="https://github.com/lnandanapalli/nlpdf"
               target="_blank"
+              aria-label="View source on GitHub"
             >
               GitHub
             </MuiButton>

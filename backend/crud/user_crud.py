@@ -9,8 +9,8 @@ from backend.models.user import User
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    """Fetch a user by email address."""
-    result = await db.execute(select(User).where(User.email == email))
+    """Fetch a user by email address (case-insensitive)."""
+    result = await db.execute(select(User).where(User.email == email.lower()))
     return result.scalars().first()
 
 
@@ -23,7 +23,7 @@ async def create_user(
 ) -> User:
     """Create a new user and flush to get the generated id."""
     user = User(
-        email=email,
+        email=email.lower(),
         hashed_password=hashed_password,
         first_name=first_name,
         last_name=last_name,
