@@ -5,7 +5,7 @@ import {
   Alert, Paper, InputAdornment, IconButton, Link, useTheme,
   Checkbox, FormControlLabel,
 } from '@mui/material';
-import { Mail, Lock, Sparkles, Eye, EyeOff, KeyRound, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, KeyRound, User } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   login as apiLogin, signup as apiSignup, verifyOtp, resendOtp, extractErrorMessage,
@@ -135,7 +135,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       <Container maxWidth="xs">
         <Paper elevation={4} sx={{ p: 4, borderRadius: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 3 }}>
-            <Sparkles color={theme.palette.primary.main} size={32} />
+            <img src="/nlpdficon.svg" alt="NLPDF logo" style={{ width: 40, height: 40 }} />
             <Typography variant="h4" color="primary.main" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
               NLPDF
             </Typography>

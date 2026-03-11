@@ -1,6 +1,6 @@
 import { Outlet, Link } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Button as MuiButton, useTheme } from '@mui/material';
-import { Sparkles } from 'lucide-react';
+
 import GitHubIcon from '@mui/icons-material/GitHub';
 import ProfileMenu from './ProfileMenu';
 
@@ -27,7 +27,7 @@ export default function AppShell({ onLogout }: AppShellProps) {
               textDecoration: 'none', color: 'inherit',
             }}
           >
-            <Sparkles color={theme.palette.primary.main} size={24} />
+            <img src="/nlpdficon.svg" alt="NLPDF logo" style={{ width: 28, height: 28 }} />
             <Typography variant="h6" color="primary.main" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
               NLPDF
             </Typography>
