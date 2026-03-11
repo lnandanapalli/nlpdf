@@ -1,7 +1,11 @@
-"""CSRF protection using the double-submit cookie pattern."""
+"""CSRF protection: double-submit cookie pattern with HMAC session binding."""
+
+import hmac
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from backend.auth.cookies import make_csrf_token
 
 CSRF_EXEMPT_PATHS = {
     "/auth/signup",
@@ -15,10 +19,16 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 def verify_csrf_token(request: Request) -> JSONResponse | None:
-    """Compare the csrf_token cookie against the X-CSRF-Token header.
+    """Verify the CSRF token is present, matches the header, AND is bound to the session.
 
-    Returns None if CSRF validation passes, or a 403 JSONResponse on failure.
-    Skips validation for safe HTTP methods and exempt paths.
+    Two-layer validation:
+      1. Double-submit: csrf_token cookie == X-CSRF-Token header
+      2. Session binding: csrf_token == HMAC(secret, access_token)
+         → Forged tokens (e.g. from subdomain cookie injection) are rejected
+         → Tokens from other sessions / after logout are rejected
+
+    Returns None if validation passes, or a 403 JSONResponse on failure.
+    Skips validation for safe HTTP methods and CSRF-exempt paths.
     """
     if request.method in SAFE_METHODS:
         return None
@@ -26,16 +36,34 @@ def verify_csrf_token(request: Request) -> JSONResponse | None:
     if request.url.path in CSRF_EXEMPT_PATHS:
         return None
 
-    cookie_token = request.cookies.get("csrf_token")
-    header_token = request.headers.get("X-CSRF-Token")
+    csrf_cookie = request.cookies.get("csrf_token")
+    csrf_header = request.headers.get("X-CSRF-Token")
+    access_token = request.cookies.get("access_token")
 
-    if not cookie_token or not header_token:
+    # Both the cookie and the header must be present
+    if not csrf_cookie or not csrf_header:
         return JSONResponse(
             status_code=403,
             content={"detail": "Missing CSRF token"},
         )
 
-    if cookie_token != header_token:
+    # Layer 1: classic double-submit — cookie must equal header
+    if not hmac.compare_digest(csrf_cookie, csrf_header):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "CSRF token mismatch"},
+        )
+
+    # Layer 2: session binding — the token must be the HMAC of the current access token.
+    # This ensures the token cannot be injected from another session or a subdomain.
+    if not access_token:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Missing CSRF token"},
+        )
+
+    expected = make_csrf_token(access_token)
+    if not hmac.compare_digest(csrf_cookie, expected):
         return JSONResponse(
             status_code=403,
             content={"detail": "CSRF token mismatch"},

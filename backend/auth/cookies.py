@@ -1,14 +1,30 @@
 """Cookie helpers for setting and clearing auth cookies."""
 
-import secrets
+import hashlib
+import hmac
 
 from fastapi import Response
 
 from backend.config import settings
 
 
+def make_csrf_token(access_token: str) -> str:
+    """Derive a CSRF token by HMAC-SHA256 signing the access token.
+
+    The resulting token is:
+    - Unguessable without the server secret (subdomain injection fails)
+    - Automatically invalidated when the access token rotates
+    - Uniquely bound to this session (different per user / per login)
+    """
+    return hmac.new(
+        settings.JWT_SECRET_KEY.encode(),
+        access_token.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    """Set httpOnly access/refresh cookies and a non-httpOnly CSRF cookie."""
+    """Set httpOnly access/refresh cookies and a non-httpOnly HMAC-bound CSRF cookie."""
     secure = settings.COOKIE_SECURE
     domain = settings.COOKIE_DOMAIN
 
@@ -33,7 +49,9 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
         domain=domain,
     )
 
-    csrf_token = secrets.token_urlsafe(32)
+    # CSRF token is HMAC(JWT_SECRET_KEY, access_token) — bound to this exact session.
+    # Non-httpOnly so frontend JS can read and send it as X-CSRF-Token header.
+    csrf_token = make_csrf_token(access_token)
     response.set_cookie(
         key="csrf_token",
         value=csrf_token,

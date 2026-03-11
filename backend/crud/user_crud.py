@@ -29,8 +29,7 @@ async def create_user(
         last_name=last_name,
     )
     db.add(user)
-    await db.flush()
-    await db.refresh(user)
+    await db.flush()  # Needed to populate user.id before the transaction commits
     return user
 
 
@@ -41,8 +40,6 @@ async def update_user_otp(
     user.otp_code = otp_code
     user.otp_expires_at = expires_at
     user.otp_attempts = 0
-    await db.commit()
-    await db.refresh(user)
 
 
 async def increment_otp_attempts(db: AsyncSession, user: User) -> None:
@@ -51,8 +48,6 @@ async def increment_otp_attempts(db: AsyncSession, user: User) -> None:
     if user.otp_attempts >= 5:
         user.otp_code = None
         user.otp_expires_at = None
-    await db.commit()
-    await db.refresh(user)
 
 
 async def mark_user_verified(db: AsyncSession, user: User) -> None:
@@ -61,8 +56,6 @@ async def mark_user_verified(db: AsyncSession, user: User) -> None:
     user.otp_code = None
     user.otp_expires_at = None
     user.otp_attempts = 0
-    await db.commit()
-    await db.refresh(user)
 
 
 async def record_failed_login(db: AsyncSession, user: User) -> None:
@@ -72,30 +65,22 @@ async def record_failed_login(db: AsyncSession, user: User) -> None:
         from datetime import timedelta, timezone
 
         user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
-    await db.commit()
-    await db.refresh(user)
 
 
 async def reset_failed_logins(db: AsyncSession, user: User) -> None:
     """Reset failed login counter and unlock on successful login."""
     user.failed_login_attempts = 0
     user.locked_until = None
-    await db.commit()
-    await db.refresh(user)
 
 
 async def update_refresh_token_jti(db: AsyncSession, user: User, jti: str) -> None:
     """Store the JTI of the user's current valid refresh token."""
     user.refresh_token_jti = jti
-    await db.commit()
-    await db.refresh(user)
 
 
 async def clear_refresh_token_jti(db: AsyncSession, user: User) -> None:
     """Revoke the user's refresh token by clearing the stored JTI."""
     user.refresh_token_jti = None
-    await db.commit()
-    await db.refresh(user)
 
 
 async def update_user_name(
@@ -104,8 +89,6 @@ async def update_user_name(
     """Update the user's first and last name."""
     user.first_name = first_name
     user.last_name = last_name
-    await db.commit()
-    await db.refresh(user)
 
 
 async def update_user_password(
@@ -113,11 +96,8 @@ async def update_user_password(
 ) -> None:
     """Update the user's hashed password."""
     user.hashed_password = hashed_password
-    await db.commit()
-    await db.refresh(user)
 
 
 async def delete_user(db: AsyncSession, user: User) -> None:
     """Delete a user and all associated data (cascade handles documents)."""
     await db.delete(user)
-    await db.commit()

@@ -9,7 +9,8 @@ import httpx
 from fastapi import HTTPException
 from huggingface_hub import AsyncInferenceClient
 
-from backend.config import SYSTEM_PROMPT, settings
+from backend.config import settings
+from backend.prompts import SYSTEM_PROMPT
 from backend.schemas.llm_schema import OperationType, validate_llm_json_list
 
 logger = structlog.get_logger(__name__)

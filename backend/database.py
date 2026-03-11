@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from backend.base import Base
+
 from backend.config import settings
 
 _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
@@ -37,9 +39,7 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-from sqlalchemy.orm import declarative_base  # noqa: E402
-
-Base = declarative_base()
+__all__ = ["Base", "engine", "AsyncSessionLocal", "get_db"]
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

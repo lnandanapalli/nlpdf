@@ -24,6 +24,5 @@ async def create_document(
         page_count=page_count,
     )
     db.add(db_document)
-    await db.commit()
-    await db.refresh(db_document)
+    await db.flush()  # Needed to populate db_document.id before the transaction commits
     return db_document
