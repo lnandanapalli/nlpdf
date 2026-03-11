@@ -1,5 +1,5 @@
 import { Outlet, Link } from 'react-router-dom';
-import { Box, AppBar, Toolbar, Typography, Button as MuiButton, useTheme } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, Button as MuiButton } from '@mui/material';
 
 import GitHubIcon from '@mui/icons-material/GitHub';
 import ProfileMenu from './ProfileMenu';
@@ -9,7 +9,7 @@ interface AppShellProps {
 }
 
 export default function AppShell({ onLogout }: AppShellProps) {
-  const theme = useTheme();
+
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
