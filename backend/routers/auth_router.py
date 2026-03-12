@@ -235,6 +235,12 @@ async def verify_otp(
     db: DB,
 ) -> SuccessResponse:
     """Verify OTP, mark account verified, issue tokens, and create a session."""
+    if not await verify_turnstile(body.cf_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
+        )
+
     user = await get_user_by_email(db, body.email)
 
     if user is None:

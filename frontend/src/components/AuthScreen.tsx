@@ -77,6 +77,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         await apiSignup(email, password, firstName.trim(), lastName.trim(), cfToken);
         setSuccess('Verification code sent to your email.');
         setShowOTP(true);
+        setCfToken('');
+        turnstileRef.current?.reset();
       }
     } catch (err) {
       handleError(err, 'An unexpected error occurred. Please try again.');
@@ -88,12 +90,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const handleVerifyOTP = async (e: SubmitEvent) => {
     e.preventDefault();
     if (!otpCode) { setError('Please enter the verification code'); return; }
+    if (!cfToken) { setError('Please complete the CAPTCHA'); return; }
 
     setLoading(true);
     setError('');
     setSuccess('');
     try {
-      await verifyOtp(email, otpCode);
+      await verifyOtp(email, otpCode, cfToken);
       onLogin();
     } catch (err) {
       handleError(err, 'Verification failed. Please check the code and try again.');
@@ -310,6 +313,17 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     },
                   }}
                 />
+
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onSuccess={(token) => setCfToken(token)}
+                    onError={() => setCfToken('')}
+                    onExpire={() => setCfToken('')}
+                    options={{ theme: 'dark' }}
+                  />
+                </Box>
 
                 <Button
                   fullWidth type="submit" variant="contained" color="primary" size="large"

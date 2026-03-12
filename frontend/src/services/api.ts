@@ -166,8 +166,8 @@ export async function signup(
   });
 }
 
-export async function verifyOtp(email: string, otpCode: string): Promise<void> {
-  await api.post('/auth/verify_otp', { email, otp_code: otpCode });
+export async function verifyOtp(email: string, otpCode: string, cfToken: string): Promise<void> {
+  await api.post('/auth/verify_otp', { email, otp_code: otpCode, cf_token: cfToken });
 }
 
 export async function resendOtp(email: string): Promise<void> {

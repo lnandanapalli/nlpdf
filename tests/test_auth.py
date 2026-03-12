@@ -124,7 +124,9 @@ async def _create_verified_user_and_get_cookies(client, email, password):
         otp_code = user.otp_code
 
     # 3. Verify OTP
-    resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": otp_code})
+    resp = await client.post(
+        "/auth/verify_otp", json={"email": email, "otp_code": otp_code, "cf_token": CF_TOKEN}
+    )
     assert resp.status_code == 200
     cookies = _extract_cookies(resp)
     return cookies
@@ -197,7 +199,9 @@ class TestOTP:
             assert user is not None, f"User {email} not found in DB"
             otp_code = user.otp_code
 
-        resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": otp_code})
+        resp = await client.post(
+            "/auth/verify_otp", json={"email": email, "otp_code": otp_code, "cf_token": CF_TOKEN}
+        )
         assert resp.status_code == 200
         cookies = _extract_cookies(resp)
         assert "access_token" in cookies
@@ -212,7 +216,9 @@ class TestOTP:
         email = "badotp@example.com"
         await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
-        resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": "000000"})
+        resp = await client.post(
+            "/auth/verify_otp", json={"email": email, "otp_code": "000000", "cf_token": CF_TOKEN}
+        )
         assert resp.status_code == 401
 
     async def test_resend_otp_success(self, client):

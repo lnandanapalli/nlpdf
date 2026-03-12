@@ -40,6 +40,7 @@ class VerifyOTPRequest(BaseModel):
 
     email: EmailStr
     otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    cf_token: str
 
 
 class ResendOTPRequest(BaseModel):
