@@ -25,7 +25,7 @@ from backend.auth.jwt import (
     create_refresh_token,
     decode_refresh_token,
 )
-from backend.auth.password import hash_password, verify_password
+from backend.auth.password import DUMMY_HASH, hash_password, verify_password
 from backend.config import settings
 from backend.crud.session_crud import (
     SessionCreate,
@@ -202,14 +202,13 @@ async def signup(
 
     if existing is not None:
         if existing.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An account with this email already exists",
+            # Prevent email enumeration by returning generic success immediately
+            return SuccessResponse(
+                message="If that email is valid, a verification code has been sent."
             )
-        # Reuse unverified slot — update credentials
-        existing.hashed_password = hash_password(body.password)
-        existing.first_name = body.first_name
-        existing.last_name = body.last_name
+
+        # SECURE: Do absolutely nothing to the user's profile or password.
+        # Only reuse the slot to regenerate a fresh token and resend the email.
         user = existing
     else:
         user = await create_user(
@@ -225,7 +224,7 @@ async def signup(
     await update_user_otp(db, user, otp_code, expires_at)
     background_tasks.add_task(send_otp_email, str(user.email), otp_code)
 
-    return SuccessResponse(message="Verification code sent to email")
+    return SuccessResponse(message="If that email is valid, a verification code has been sent.")
 
 
 @router.post("/verify_otp")
@@ -239,18 +238,24 @@ async def verify_otp(
     user = await get_user_by_email(db, body.email)
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        hmac.compare_digest("dummy", body.otp_code)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification code",
+        )
 
     if user.is_verified:
+        hmac.compare_digest("dummy", body.otp_code)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account is already verified",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification code",
         )
 
     if user.otp_code is None or user.otp_expires_at is None:
+        hmac.compare_digest("dummy", body.otp_code)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No active verification code. Please request a new one.",
+            detail="Invalid verification code",
         )
 
     if (user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:
@@ -290,13 +295,9 @@ async def resend_otp(
     """Generate and send a new OTP code to an unverified email."""
     user = await get_user_by_email(db, body.email)
 
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account is already verified",
+    if user is None or user.is_verified:
+        return SuccessResponse(
+            message="If an account with this email exists, a verification code was sent."
         )
 
     otp_code = generate_otp()
@@ -304,7 +305,9 @@ async def resend_otp(
     await update_user_otp(db, user, otp_code, expires_at)
     background_tasks.add_task(send_otp_email, str(user.email), otp_code)
 
-    return SuccessResponse(message="Verification code resent to email")
+    return SuccessResponse(
+        message="If an account with this email exists, a verification code was sent."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +333,7 @@ async def login(
     user = await get_user_by_email(db, body.email)
 
     if user is None:
+        verify_password(body.password, DUMMY_HASH)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",

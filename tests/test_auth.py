@@ -141,16 +141,17 @@ class TestSignup:
         assert resp.status_code == 201
         data = resp.json()
         assert "message" in data
-        assert "Verification code sent" in data["message"]
+        assert "If that email is valid, a verification code has been sent" in data["message"]
 
-    async def test_signup_duplicate_email_returns_409_if_verified(self, client):
+    async def test_signup_duplicate_email_returns_201_if_verified(self, client):
         await _create_verified_user_and_get_cookies(client, "dupe@example.com", "securepass123")
 
         resp2 = await client.post(
             "/auth/signup",
             json=_signup_payload("dupe@example.com", "securepass123"),
         )
-        assert resp2.status_code == 409
+        assert resp2.status_code == 201
+        assert "If that email is valid" in resp2.json()["message"]
 
     async def test_signup_short_password_returns_422(self, client):
         resp = await client.post(
@@ -313,6 +314,7 @@ class TestRefresh:
         resp = await client.post(
             "/auth/refresh",
             cookies={"refresh_token": cookies["refresh_token"]},
+            json={},
         )
         assert resp.status_code == 200
         new_cookies = _extract_cookies(resp)
@@ -324,7 +326,7 @@ class TestRefresh:
         assert "message" in data
 
     async def test_refresh_without_cookie_returns_401(self, client):
-        resp = await client.post("/auth/refresh")
+        resp = await client.post("/auth/refresh", json={})
         assert resp.status_code == 401
 
     async def test_refresh_with_access_token_returns_401(self, client):
@@ -336,6 +338,7 @@ class TestRefresh:
         resp = await client.post(
             "/auth/refresh",
             cookies={"refresh_token": cookies["access_token"]},
+            json={},
         )
         assert resp.status_code == 401
 
@@ -358,6 +361,7 @@ class TestRefresh:
         resp = await client.post(
             "/auth/refresh",
             cookies={"refresh_token": expired_token},
+            json={},
         )
         assert resp.status_code == 401
 
@@ -659,7 +663,7 @@ class TestCSRF:
         assert resp.status_code == 200
 
     async def test_exempt_path_passes_without_csrf(self, csrf_client):
-        resp = await csrf_client.post("/auth/login")
+        resp = await csrf_client.post("/auth/login", json={})
         assert resp.status_code == 200
 
     async def test_missing_csrf_header_returns_403(self, csrf_client):
@@ -688,10 +692,13 @@ class TestCSRF:
         assert "mismatch" in resp.json()["detail"]
 
     async def test_csrf_match_passes(self, csrf_client):
-        token = "matching_csrf_token"
+        from backend.auth.cookies import make_csrf_token
+
+        access = "dummy_access"
+        token = make_csrf_token(access)
         resp = await csrf_client.post(
             "/protected",
-            cookies={"csrf_token": token},
+            cookies={"csrf_token": token, "access_token": access},
             headers={"X-CSRF-Token": token},
         )
         assert resp.status_code == 200

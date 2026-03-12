@@ -28,7 +28,13 @@ class TestValidateAndSavePdf:
         await validate_and_save_pdf(upload, dest)
 
         assert dest.exists()
-        assert dest.read_bytes() == pdf_bytes
+
+        # The sanitization step modifies the exact byte structure.
+        # Instead of strict byte matching, assert that it remains a completely valid PDF.
+        import pikepdf
+
+        with pikepdf.open(dest):
+            pass
 
     async def test_not_a_pdf_raises(self, tmp_path):
         dest = tmp_path / "not_a_pdf.pdf"

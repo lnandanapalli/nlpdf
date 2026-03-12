@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import markdown
+import nh3
 import structlog
 from xhtml2pdf import pisa
 
@@ -88,10 +89,45 @@ def markdown_to_pdf(input_path: Path, output_path: Path, paper_size: str = "A4")
 
     md_text = input_path.read_text(encoding="utf-8")
 
-    html_body = markdown.markdown(
+    raw_html_body = markdown.markdown(
         md_text,
         extensions=["tables", "fenced_code", "nl2br", "sane_lists"],
     )
+
+    # Security: We only allow the strict subset of HTML tags that the Markdown library
+    # mathematically generates for basic text formatting. If a user tries to write
+    # ANY raw HTML (like <div>, <iframe>, <script>, <img>, <form>), it is instantly nuked.
+    safe_markdown_tags = {
+        "p",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "strong",
+        "em",
+        "code",
+        "pre",
+        "blockquote",
+        "ul",
+        "ol",
+        "li",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "br",
+        "hr",
+        "a",
+    }
+
+    # We also strictly limit attributes to only what's necessary (e.g. href for links)
+    safe_attributes = {"a": {"href", "title"}}
+
+    html_body = nh3.clean(raw_html_body, tags=safe_markdown_tags, attributes=safe_attributes)
 
     page_css = PAPER_SIZES.get(paper_size, PAPER_SIZES["A4"])
 

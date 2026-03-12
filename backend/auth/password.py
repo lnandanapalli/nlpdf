@@ -4,6 +4,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 _ph = PasswordHasher()
+DUMMY_HASH = _ph.hash("timing_mitigation_pass")
 
 
 def hash_password(plain: str) -> str:

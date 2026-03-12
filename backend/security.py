@@ -5,7 +5,9 @@ import shutil
 import tempfile
 
 import anyio
+from anyio import to_thread
 from fastapi import HTTPException, Request, UploadFile
+import pikepdf
 import structlog
 from user_agents import parse as parse_ua
 
@@ -19,6 +21,15 @@ PDF_MAGIC_BYTES = b"%PDF-"
 ALLOWED_EXTENSIONS = frozenset({".pdf", ".md"})
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "nlpdf_uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _sanitize_pdf_sync(file_path: Path) -> None:
+    """Synchronously sanitize a PDF using pikepdf to prevent polyglot attacks."""
+    try:
+        with pikepdf.open(file_path, allow_overwriting_input=True) as pdf:
+            pdf.save(file_path)
+    except pikepdf.PdfError as e:
+        raise ValueError(f"Corrupted or invalid PDF structure: {e}") from e
 
 
 async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
@@ -76,6 +87,15 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
             status_code=400,
             detail=f"File '{upload.filename}' is empty",
         )
+
+    try:
+        await to_thread.run_sync(_sanitize_pdf_sync, dest)
+    except ValueError as e:
+        await anyio.Path(dest).unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Security scan failed for '{upload.filename}': {e}",
+        ) from e
 
 
 async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
