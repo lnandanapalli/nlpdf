@@ -4,6 +4,8 @@ from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 
+MAX_PDF_PAGES = 5000
+
 
 def merge_pdfs(input_paths: list[Path], output_path: Path) -> Path:
     """
@@ -22,12 +24,12 @@ def merge_pdfs(input_paths: list[Path], output_path: Path) -> Path:
     for pdf_path in input_paths:
         reader = PdfReader(pdf_path)
         total_pages += len(reader.pages)
-        if total_pages > 5000:
-            raise ValueError("Combined PDFs exceed maximum page count (5000)")
+        if total_pages > MAX_PDF_PAGES:
+            raise ValueError(f"Combined PDFs exceed maximum page count ({MAX_PDF_PAGES})")
         for page in reader.pages:
             writer.add_page(page)
 
-    with open(output_path, "wb") as output_file:
+    with output_path.open("wb") as output_file:
         writer.write(output_file)
 
     return output_path

@@ -1,27 +1,24 @@
 """JWT token creation and verification."""
 
+from datetime import UTC, datetime, timedelta
 import secrets
-from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import jwt
 
 from backend.config import settings
 
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict[str, Any]) -> str:
     """Create a JWT access token with an expiry."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode["exp"] = expire
     to_encode["type"] = "access"
-    return jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-    )
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(data: dict) -> tuple[str, str]:
+def create_refresh_token(data: dict[str, Any]) -> tuple[str, str]:
     """Create a JWT refresh token with a longer expiry.
 
     Returns:
@@ -30,26 +27,22 @@ def create_refresh_token(data: dict) -> tuple[str, str]:
     """
     jti = secrets.token_urlsafe(16)
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode["exp"] = expire
     to_encode["type"] = "refresh"
     to_encode["jti"] = jti
-    token = jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-    )
+    token = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return token, jti
 
 
-def decode_access_token(token: str) -> dict:
+def decode_access_token(token: str) -> dict[str, Any]:
     """Decode and verify a JWT access token.
 
     Raises:
         jwt.ExpiredSignatureError: If the token has expired.
         jwt.InvalidTokenError: If the token is invalid or not an access token.
     """
-    payload = jwt.decode(
+    payload: dict[str, Any] = jwt.decode(
         token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
     )
     if payload.get("type") != "access":
@@ -57,14 +50,14 @@ def decode_access_token(token: str) -> dict:
     return payload
 
 
-def decode_refresh_token(token: str) -> dict:
+def decode_refresh_token(token: str) -> dict[str, Any]:
     """Decode and verify a JWT refresh token.
 
     Raises:
         jwt.ExpiredSignatureError: If the token has expired.
         jwt.InvalidTokenError: If the token is invalid or not a refresh token.
     """
-    payload = jwt.decode(
+    payload: dict[str, Any] = jwt.decode(
         token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
     )
     if payload.get("type") != "refresh":

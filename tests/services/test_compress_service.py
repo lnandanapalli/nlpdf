@@ -4,9 +4,9 @@ import io
 from pathlib import Path
 
 import pikepdf
-import pytest
 from PIL import Image
 from pypdf import PdfReader
+import pytest
 
 from backend.services.compress_service import compress_pdf
 
@@ -139,9 +139,7 @@ class TestCompressPdfWithNonJpegImages:
 
     def test_png_image_gets_compressed(self, tmp_path):
         """Non-JPEG images should be converted to JPEG."""
-        input_path = _make_pdf_with_png_image(
-            tmp_path / "input.pdf", width=300, height=300
-        )
+        input_path = _make_pdf_with_png_image(tmp_path / "input.pdf", width=300, height=300)
         output_path = tmp_path / "compressed.pdf"
 
         result = compress_pdf(input_path, output_path, level=2)

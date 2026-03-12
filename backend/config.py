@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings from environment variables."""
 
-    # Environment: "production" or "development"
+    # Valid values: "production" or "development"
     APP_ENV: str = "production"
 
     # HuggingFace Config
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # JWT Authentication
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Email Service
@@ -60,9 +60,7 @@ class Settings(BaseSettings):
     # Cloudflare Turnstile
     CLOUDFLARE_TURNSTILE_SECRET_KEY: str
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
     def _apply_dev_overrides(self) -> "Settings":
@@ -75,4 +73,4 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()  # type: ignore
+settings = Settings()  # type: ignore[call-arg]

@@ -1,7 +1,7 @@
 """Tests for the rotate service."""
 
-import pytest
 from pypdf import PdfReader
+import pytest
 
 from backend.services.rotate_service import rotate_pdf
 

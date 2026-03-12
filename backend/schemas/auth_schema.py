@@ -39,7 +39,7 @@ class VerifyOTPRequest(BaseModel):
     """Request to verify an OTP."""
 
     email: EmailStr
-    otp_code: str
+    otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class ResendOTPRequest(BaseModel):
@@ -77,4 +77,20 @@ class DeleteAccountRequest(BaseModel):
 class DeleteAccountConfirmRequest(BaseModel):
     """Request to confirm account deletion (step 2: verify OTP)."""
 
-    otp_code: str
+    otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class SessionResponse(BaseModel):
+    """A single active login session — shown in the 'Active Sessions' settings page."""
+
+    id: int
+    ip_address: str | None = None
+    device_name: str | None = None
+    browser: str | None = None
+    os: str | None = None
+    is_mobile: bool = False
+    created_at: datetime | None = None
+    last_used_at: datetime | None = None
+    is_current: bool = False  # True when this session matches the caller's session_id
+
+    model_config = {"from_attributes": True}

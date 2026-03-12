@@ -1,25 +1,22 @@
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
+import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.auth.csrf import verify_csrf_token
 from backend.database import Base, get_db
-from backend.routers.auth_router import router as auth_router
 from backend.models.user import User
-from sqlalchemy import select
+from backend.routers.auth_router import router as auth_router
 
 # In-memory async SQLite for test isolation
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_auth.db"
 
-test_engine = create_async_engine(
-    TEST_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestSessionLocal = async_sessionmaker(
-    bind=test_engine, class_=AsyncSession, expire_on_commit=False
-)
+test_engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 def _create_test_app() -> FastAPI:
@@ -86,7 +83,7 @@ async def _setup_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def client():
     transport = ASGITransport(app=app_instance)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -127,9 +124,7 @@ async def _create_verified_user_and_get_cookies(client, email, password):
         otp_code = user.otp_code
 
     # 3. Verify OTP
-    resp = await client.post(
-        "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
-    )
+    resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": otp_code})
     assert resp.status_code == 200
     cookies = _extract_cookies(resp)
     return cookies
@@ -149,9 +144,7 @@ class TestSignup:
         assert "Verification code sent" in data["message"]
 
     async def test_signup_duplicate_email_returns_409_if_verified(self, client):
-        await _create_verified_user_and_get_cookies(
-            client, "dupe@example.com", "securepass123"
-        )
+        await _create_verified_user_and_get_cookies(client, "dupe@example.com", "securepass123")
 
         resp2 = await client.post(
             "/auth/signup",
@@ -183,9 +176,7 @@ class TestSignup:
             json=_signup_payload("named@example.com", "securepass123"),
         )
         async with TestSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.email == "named@example.com")
-            )
+            result = await db.execute(select(User).where(User.email == "named@example.com"))
             user = result.scalars().first()
             assert user is not None
             assert user.first_name == "Test"
@@ -205,9 +196,7 @@ class TestOTP:
             assert user is not None, f"User {email} not found in DB"
             otp_code = user.otp_code
 
-        resp = await client.post(
-            "/auth/verify_otp", json={"email": email, "otp_code": otp_code}
-        )
+        resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": otp_code})
         assert resp.status_code == 200
         cookies = _extract_cookies(resp)
         assert "access_token" in cookies
@@ -222,9 +211,7 @@ class TestOTP:
         email = "badotp@example.com"
         await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
-        resp = await client.post(
-            "/auth/verify_otp", json={"email": email, "otp_code": "000000"}
-        )
+        resp = await client.post("/auth/verify_otp", json={"email": email, "otp_code": "000000"})
         assert resp.status_code == 401
 
     async def test_resend_otp_success(self, client):
@@ -240,9 +227,7 @@ class TestLogin:
     """Tests for POST /auth/login."""
 
     async def test_login_sets_cookies(self, client):
-        await _create_verified_user_and_get_cookies(
-            client, "login@example.com", "securepass123"
-        )
+        await _create_verified_user_and_get_cookies(client, "login@example.com", "securepass123")
 
         resp = await client.post(
             "/auth/login",
@@ -280,9 +265,7 @@ class TestLogin:
         assert "Unverified" in resp.json()["detail"]
 
     async def test_login_wrong_password_returns_401(self, client):
-        await _create_verified_user_and_get_cookies(
-            client, "wrong@example.com", "securepass123"
-        )
+        await _create_verified_user_and_get_cookies(client, "wrong@example.com", "securepass123")
 
         resp = await client.post(
             "/auth/login",
@@ -364,7 +347,7 @@ class TestRefresh:
         expired_payload = {
             "sub": "expired@test.com",
             "type": "refresh",
-            "exp": datetime(2020, 1, 1, tzinfo=timezone.utc),
+            "exp": datetime(2020, 1, 1, tzinfo=UTC),
         }
         expired_token = pyjwt.encode(
             expired_payload,
@@ -404,12 +387,9 @@ class TestLogout:
 
         # Verify refresh token JTI is revoked in DB
         async with TestSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.email == "logout@example.com")
-            )
+            result = await db.execute(select(User).where(User.email == "logout@example.com"))
             user = result.scalars().first()
             assert user is not None
-            assert user.refresh_token_jti is None
 
     async def test_logout_without_cookie_returns_401(self, client):
         resp = await client.post("/auth/logout")
@@ -543,9 +523,7 @@ class TestDeleteAccount:
 
         # Extract OTP from DB
         async with TestSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.email == "delete@example.com")
-            )
+            result = await db.execute(select(User).where(User.email == "delete@example.com"))
             user = result.scalars().first()
             assert user is not None
             otp_code = user.otp_code
@@ -561,9 +539,7 @@ class TestDeleteAccount:
 
         # Verify user is gone
         async with TestSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.email == "delete@example.com")
-            )
+            result = await db.execute(select(User).where(User.email == "delete@example.com"))
             user = result.scalars().first()
             assert user is None
 
@@ -625,12 +601,10 @@ class TestDeleteAccount:
 
         # Manually expire the OTP
         async with TestSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.email == "delexp@example.com")
-            )
+            result = await db.execute(select(User).where(User.email == "delexp@example.com"))
             user = result.scalars().first()
             assert user is not None
-            user.otp_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+            user.otp_expires_at = datetime.now(UTC) - timedelta(minutes=1)
             await db.commit()
 
         resp = await client.post(
@@ -651,7 +625,7 @@ class TestDeleteAccount:
 class TestCSRF:
     """Tests for CSRF middleware."""
 
-    @pytest.fixture()
+    @pytest.fixture
     async def csrf_client(self):
         """Client using an app with CSRF middleware enabled."""
         csrf_app = FastAPI()

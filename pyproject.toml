@@ -30,6 +30,7 @@ argon2-cffi = "^25.1.0"
 markdown = "^3.10.2"
 xhtml2pdf = "^0.2.17"
 Pillow = "^11.0"
+user-agents = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.2"
@@ -54,13 +55,103 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py313"
+line-length = 100
+exclude = ["migrations", ".venv", ".git", "alembic"]
 
 [tool.ruff.lint]
-select = ["E", "F", "N", "W"]
-ignore = ["E501"]
+select = ["ALL"]
+ignore = [
+    # --- Formatting (Black owns these) ---
+    "COM812",   # missing trailing comma — Black adds/removes these
+    "ISC001",   # implicit string concat on one line — Black handles
+
+    # --- Annotations ---
+    "ANN401",   # disallows `Any` — required for SQLAlchemy and some Pydantic patterns
+
+    # --- FastAPI patterns ---
+    "B008",     # function calls in default args — FastAPI `Depends()` pattern
+    "ARG001",   # unused function argument — FastAPI dependency injection
+    "ARG002",   # unused method argument — FastAPI dependency injection
+
+    # --- Exception message style ---
+    "EM101",    # string literal in exception — HTTPException takes strings directly
+    "EM102",    # f-string in exception — HTTPException takes f-strings
+    "TRY003",   # long exception messages — HTTPException detail pattern
+    "TRY300",   # consider `else` in try block — not always clearer
+
+    # --- Docstring style ---
+    "D100",     # missing docstring in public module — entry points exempt
+    "D104",     # missing docstring in public package — __init__.py files
+    "D401",     # imperative mood — too prescriptive for descriptive docstrings
+
+    # --- Boolean traps ---
+    "FBT001",   # boolean positional arg — FastAPI query params commonly use bool
+    "FBT002",   # boolean default value — same reason
+
+    # --- Logging ---
+    "G004",     # f-string in logging call — structlog uses kwargs, not format strings
+    "LOG015",   # root logger — structlog wraps stdlib logger
+
+    # --- Not applicable to this stack ---
+    "CPY001",   # missing copyright notice
+    "DJ",       # Django-specific
+    "PD",       # pandas-specific
+    "NPY",      # NumPy-specific
+    "AIR",      # Airflow-specific
+    "INT",      # gettext/i18n
+
+    # --- TODOs allowed during active development ---
+    "TD002",    # missing TODO author
+    "TD003",    # missing TODO issue link
+    "FIX002",   # line contains TODO
+
+    # --- Docstring convention conflicts ---
+    # Google convention uses D211 + D213; D203 + D212 are their opposites.
+    # select=ALL re-enables them, so we suppress the conflicting pair.
+    "D203",     # one blank line before class docstring — conflicts with D211
+    "D212",     # multi-line summary on first line  — conflicts with D213
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/auth/csrf.py"         = ["PLR0911"]       # early-return guard clauses in security code
+"backend/auth/dependencies.py" = ["ANN"]            # FastAPI Depends signatures
+"backend/main.py"              = ["I001"]             # platform workaround splits stdlib block
+"alembic/**"                   = ["ANN", "N", "I", "D", "ERA001"]  # auto-generated
+"tests/**"                     = ["ANN", "S", "D", "PLR2004", "SLF001", "ARG", "PTH", "PLC", "SIM108", "FBT", "RET"]
+"backend/services/operations_executor_service.py" = ["C901", "PLR0912"]  # typed dispatch pattern
+"backend/services/split_service.py"               = ["C901"]              # complex PDF validation
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
+force-sort-within-sections = true
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+
+[tool.ruff.lint.pylint]
+max-args = 8       # DB CRUD functions legitimately need db + multiple columns
+max-returns = 7    # Guard-clause pattern in auth/security code
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Cookie"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.black]
 target-version = ["py313"]
+line-length = 100
 
 [tool.bandit]
 exclude_dirs = ["tests"]
+skips = ["B110"]  # try/except/pass — intentional in logout (documented)
+
+[tool.ty.rules]
+# user_agents has no py.typed marker; the runtime import is fine.
+unresolved-import = "ignore"

@@ -1,11 +1,10 @@
 """Execute validated LLM operations using existing services."""
 
+from pathlib import Path
 import zipfile
 
-import structlog
-from pathlib import Path
-
 from fastapi import HTTPException
+import structlog
 
 from backend.schemas.llm_schema import (
     CompressOperation,
@@ -25,6 +24,7 @@ logger = structlog.get_logger(__name__)
 
 # Operations that support bulk mode (apply to each file individually)
 BULK_OPERATIONS = (CompressOperation, MarkdownToPdfOperation)
+MIN_FILES_FOR_MERGE = 2
 
 
 def execute_operation(
@@ -42,16 +42,13 @@ def execute_operation(
     Raises:
         HTTPException: If execution fails.
     """
+    if isinstance(operation, MergeOperation) and len(input_paths) < MIN_FILES_FOR_MERGE:
+        raise HTTPException(
+            status_code=400,
+            detail=("Merge requires multiple files. " f"Only {len(input_paths)} file(s) provided."),
+        )
     try:
         if isinstance(operation, MergeOperation):
-            if len(input_paths) < 2:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Merge requires multiple files. "
-                        f"Only {len(input_paths)} file(s) provided."
-                    ),
-                )
             return merge_pdfs(input_paths, output_path)
 
         # For non-merge operations, execute on the first provided file
@@ -76,9 +73,7 @@ def execute_operation(
             return rotate_pdf(main_input, operation.parameters.rotations, output_path)
 
         if isinstance(operation, MarkdownToPdfOperation):
-            return markdown_to_pdf(
-                main_input, output_path, operation.parameters.paper_size
-            )
+            return markdown_to_pdf(main_input, output_path, operation.parameters.paper_size)
 
     except HTTPException:
         raise
@@ -88,13 +83,13 @@ def execute_operation(
             status_code=400,
             detail="The operation could not be completed. Please check "
             "that your page numbers and ranges are valid for the uploaded document.",
-        )
+        ) from e
     except Exception:
         logger.exception("Operation %s failed", operation.operation)
         raise HTTPException(
             status_code=500,
             detail="Something went wrong while processing your file. Please try again.",
-        )
+        ) from None
 
     raise HTTPException(status_code=400, detail="Unknown operation")
 
@@ -114,10 +109,7 @@ def _zip_results(
     zip_path = output_dir / "output.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, path in enumerate(result_paths):
-            if i < len(original_filenames):
-                name = original_filenames[i]
-            else:
-                name = f"file_{i + 1}"
+            name = original_filenames[i] if i < len(original_filenames) else f"file_{i + 1}"
             arc_name = f"{op_name}_{name}{path.suffix}"
             zf.write(path, arc_name)
     return zip_path
@@ -156,16 +148,12 @@ def execute_operation_chain(
     # Single operation, single file — fast path (unchanged behavior)
     if len(operations) == 1 and not _is_bulk(operations[0], len(input_paths)):
         output_path = output_dir / "output.pdf"
-        return execute_operation(
-            operations[0], input_paths, output_path, original_filename
-        )
+        return execute_operation(operations[0], input_paths, output_path, original_filename)
 
     # Single bulk operation — no chain needed
     if len(operations) == 1 and _is_bulk(operations[0], len(input_paths)):
         results = _execute_bulk(operations[0], input_paths, output_dir)
-        return _zip_results(
-            results, output_dir, original_filenames, operations[0].operation
-        )
+        return _zip_results(results, output_dir, original_filenames, operations[0].operation)
 
     current_inputs = list(input_paths)
     result_path: Path | None = None

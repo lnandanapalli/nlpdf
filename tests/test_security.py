@@ -3,8 +3,8 @@
 import io
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi import HTTPException, UploadFile
+import pytest
 
 from backend.security import (
     MAX_FILE_SIZE_BYTES,

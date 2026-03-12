@@ -4,10 +4,12 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+import structlog
 
 from backend.base import Base
-
 from backend.config import settings
+
+logger = structlog.get_logger(__name__)
 
 _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
 
@@ -39,10 +41,10 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-__all__ = ["Base", "engine", "AsyncSessionLocal", "get_db"]
+__all__ = ["AsyncSessionLocal", "Base", "engine", "get_db"]
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Yields an async database session."""
     async with AsyncSessionLocal() as session:
         try:
@@ -50,6 +52,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.commit()
         except Exception:
             await session.rollback()
+            logger.exception("db_session_error")
             raise
         finally:
             await session.close()

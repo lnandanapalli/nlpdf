@@ -21,7 +21,7 @@ def send_otp_email(to_email: str, otp_code: str) -> None:
     """
 
     params = cast(
-        resend.Emails.SendParams,
+        "resend.Emails.SendParams",
         {
             "from": settings.EMAIL_FROM,
             "to": to_email,
@@ -32,8 +32,8 @@ def send_otp_email(to_email: str, otp_code: str) -> None:
 
     try:
         resend.Emails.send(params)
-    except Exception as e:
-        logger.error("Failed to send email", to_email=to_email, error=str(e))
+    except Exception:  # resend SDK raises unspecified exception types
+        logger.exception("Failed to send email", to_email=to_email)
 
 
 def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
@@ -47,7 +47,7 @@ def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
     """
 
     params = cast(
-        resend.Emails.SendParams,
+        "resend.Emails.SendParams",
         {
             "from": settings.EMAIL_FROM,
             "to": to_email,
@@ -58,7 +58,5 @@ def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
 
     try:
         resend.Emails.send(params)
-    except Exception as e:
-        logger.error(
-            "Failed to send deletion OTP email", to_email=to_email, error=str(e)
-        )
+    except Exception:  # resend SDK raises unspecified exception types
+        logger.exception("Failed to send deletion OTP email", to_email=to_email)

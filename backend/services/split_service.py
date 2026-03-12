@@ -1,9 +1,11 @@
 """PDF splitting service."""
 
-import zipfile
 from pathlib import Path
+import zipfile
 
 from pypdf import PdfReader, PdfWriter
+
+MAX_PDF_PAGES = 5000
 
 
 def split_pdf(
@@ -31,15 +33,13 @@ def split_pdf(
     reader = PdfReader(input_path)
     total_pages = len(reader.pages)
 
-    if total_pages > 5000:
-        raise ValueError("PDF exceeds maximum page count (5000)")
+    if total_pages > MAX_PDF_PAGES:
+        raise ValueError(f"PDF exceeds maximum page count ({MAX_PDF_PAGES})")
 
     # Validate ranges against actual PDF page count (1-indexed)
     for start, end in page_ranges:
         if end > total_pages:
-            raise ValueError(
-                f"Range [{start}, {end}] exceeds PDF page count ({total_pages})"
-            )
+            raise ValueError(f"Range [{start}, {end}] exceeds PDF page count ({total_pages})")
 
     if merge:
         # Merge all ranges into a single PDF
@@ -50,32 +50,31 @@ def split_pdf(
                 if page_num < len(reader.pages):
                     writer.add_page(reader.pages[page_num])
 
-        with open(output_path, "wb") as output_file:
+        with output_path.open("wb") as output_file:
             writer.write(output_file)
 
         return output_path
-    else:
-        # Create separate PDFs for each range and zip them
-        temp_dir = output_path.parent
-        pdf_files = []
+    # Create separate PDFs for each range and zip them
+    temp_dir = output_path.parent
+    pdf_files = []
 
-        for start, end in page_ranges:
-            writer = PdfWriter()
-            # Convert from 1-indexed inclusive to 0-indexed for pypdf
-            for page_num in range(start - 1, end):
-                if page_num < len(reader.pages):
-                    writer.add_page(reader.pages[page_num])
+    for start, end in page_ranges:
+        writer = PdfWriter()
+        # Convert from 1-indexed inclusive to 0-indexed for pypdf
+        for page_num in range(start - 1, end):
+            if page_num < len(reader.pages):
+                writer.add_page(reader.pages[page_num])
 
-            pdf_filename = f"{original_filename}_range_{start}-{end}.pdf"
-            pdf_path = temp_dir / pdf_filename
-            with open(pdf_path, "wb") as pdf_file:
-                writer.write(pdf_file)
-            pdf_files.append(pdf_path)
+        pdf_filename = f"{original_filename}_range_{start}-{end}.pdf"
+        pdf_path = temp_dir / pdf_filename
+        with pdf_path.open("wb") as pdf_file:
+            writer.write(pdf_file)
+        pdf_files.append(pdf_path)
 
-        # Create ZIP file
-        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for path in pdf_files:
-                zipf.write(path, path.name)
-                path.unlink()  # Delete temporary PDF file
+    # Create ZIP file
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for path in pdf_files:
+            zipf.write(path, path.name)
+            path.unlink()  # Delete temporary PDF file
 
-        return output_path
+    return output_path

@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 
-import pytest
 from fastapi import HTTPException
+import pytest
 
 from backend.schemas.compress_schema import CompressParams
 from backend.schemas.llm_schema import (

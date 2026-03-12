@@ -35,7 +35,7 @@ class MergeOperation(BaseModel):
     """Merge operation from LLM (no parameters)."""
 
     operation: Literal["merge"]
-    parameters: dict = Field(default_factory=dict)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class MarkdownToPdfOperation(BaseModel):
@@ -47,11 +47,7 @@ class MarkdownToPdfOperation(BaseModel):
 
 # All allowed operation types
 OperationType = (
-    CompressOperation
-    | SplitOperation
-    | RotateOperation
-    | MergeOperation
-    | MarkdownToPdfOperation
+    CompressOperation | SplitOperation | RotateOperation | MergeOperation | MarkdownToPdfOperation
 )
 
 # Maps operation name -> typed model
@@ -69,8 +65,7 @@ ALLOWED_OPERATIONS = frozenset(OPERATION_MAP.keys())
 def validate_llm_json(
     llm_output: dict[str, Any],
 ) -> OperationType:
-    """
-    Validate LLM-generated JSON against allowed operations.
+    """Validate LLM-generated JSON against allowed operations.
 
     Two-phase validation:
     1. Check operation name is one of the allowed set
@@ -84,8 +79,7 @@ def validate_llm_json(
     operation = llm_output.get("operation")
     if operation not in ALLOWED_OPERATIONS:
         raise ValueError(
-            f"Unknown operation '{operation}'. "
-            f"Allowed: {', '.join(sorted(ALLOWED_OPERATIONS))}"
+            f"Unknown operation '{operation}'. " f"Allowed: {', '.join(sorted(ALLOWED_OPERATIONS))}"
         )
 
     model_class = OPERATION_MAP[operation]
@@ -98,8 +92,7 @@ def validate_llm_json(
 def validate_llm_json_list(
     llm_output: list[dict[str, Any]],
 ) -> list[OperationType]:
-    """
-    Validate a list of LLM-generated operations.
+    """Validate a list of LLM-generated operations.
 
     Returns:
         List of fully-typed operation models.

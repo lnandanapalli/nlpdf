@@ -1,7 +1,7 @@
 """Tests for Pydantic schemas and LLM JSON validation."""
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
 from backend.schemas.compress_schema import CompressParams
 from backend.schemas.llm_schema import (
@@ -89,9 +89,7 @@ class TestValidateLlmJson:
     """Tests for validate_llm_json dispatch."""
 
     def test_compress_operation(self):
-        result = validate_llm_json(
-            {"operation": "compress", "parameters": {"level": 2}}
-        )
+        result = validate_llm_json({"operation": "compress", "parameters": {"level": 2}})
         assert isinstance(result, CompressOperation)
         assert result.parameters.level == 2
 
@@ -105,9 +103,7 @@ class TestValidateLlmJson:
         assert isinstance(result, SplitOperation)
 
     def test_rotate_operation(self):
-        result = validate_llm_json(
-            {"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}
-        )
+        result = validate_llm_json({"operation": "rotate", "parameters": {"rotations": [[1, 90]]}})
         assert isinstance(result, RotateOperation)
 
     def test_merge_operation(self):

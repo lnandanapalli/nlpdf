@@ -1,3 +1,4 @@
+exclude: '^migrations/'
 repos:
   - repo: local
     hooks:

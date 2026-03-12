@@ -1,5 +1,11 @@
 """Validators for page-related operations."""
 
+# Domain limits — protect against DoS via absurdly large page numbers / ranges
+MAX_PAGE_RANGES = 100
+MAX_PAGES_PER_RANGE = 10_000
+MAX_PAGE_NUMBER = 50_000
+MAX_PAGE_INDICES = 10_000
+
 
 def validate_page_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """
@@ -18,34 +24,31 @@ def validate_page_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]
     if not ranges:
         raise ValueError("At least one page range must be provided")
 
-    if len(ranges) > 100:
-        raise ValueError("Maximum 100 page ranges allowed")
+    if len(ranges) > MAX_PAGE_RANGES:
+        raise ValueError(f"Maximum {MAX_PAGE_RANGES} page ranges allowed")
 
     for i, (start, end) in enumerate(ranges):
         # Check for values less than 1 (1-indexed)
         if start < 1 or end < 1:
             raise ValueError(
-                f"Range {i}: Page numbers must be >= 1 "
-                f"(got start={start}, end={end})"
+                f"Range {i}: Page numbers must be >= 1 " f"(got start={start}, end={end})"
             )
 
         # Check start <= end (inclusive ranges)
         if start > end:
-            raise ValueError(
-                f"Range {i}: Start page ({start}) must be <= end page ({end})"
-            )
+            raise ValueError(f"Range {i}: Start page ({start}) must be <= end page ({end})")
 
         # Check for excessively large ranges (prevent DoS)
-        if end - start + 1 > 10000:
+        if end - start + 1 > MAX_PAGES_PER_RANGE:
             raise ValueError(
-                f"Range {i}: Maximum 10000 pages per range allowed "
+                f"Range {i}: Maximum {MAX_PAGES_PER_RANGE} pages per range allowed "
                 f"(got {end - start + 1})"
             )
 
         # Check for unreasonably large page numbers (prevent DoS)
-        if end > 50000:
+        if end > MAX_PAGE_NUMBER:
             raise ValueError(
-                f"Range {i}: Page number {end} exceeds maximum allowed (50000)"
+                f"Range {i}: Page number {end} exceeds maximum allowed ({MAX_PAGE_NUMBER})"
             )
 
     # Check for overlapping ranges
@@ -84,12 +87,10 @@ def validate_page_indices(
         return None
 
     if not indices:
-        raise ValueError(
-            "If page_indices is provided, it must contain at least one index"
-        )
+        raise ValueError("If page_indices is provided, it must contain at least one index")
 
-    if len(indices) > 10000:
-        raise ValueError("Maximum 10000 page indices allowed")
+    if len(indices) > MAX_PAGE_INDICES:
+        raise ValueError(f"Maximum {MAX_PAGE_INDICES} page indices allowed")
 
     # Check for duplicates
     if len(indices) != len(set(indices)):
@@ -99,8 +100,8 @@ def validate_page_indices(
         if idx < 1:
             raise ValueError(f"Page index {idx} must be >= 1 (1-indexed)")
 
-        if idx > 50000:
-            raise ValueError(f"Page index {idx} exceeds maximum allowed (50000)")
+        if idx > MAX_PAGE_NUMBER:
+            raise ValueError(f"Page index {idx} exceeds maximum allowed ({MAX_PAGE_NUMBER})")
 
         if max_pages is not None and idx > max_pages:
             raise ValueError(f"Page index {idx} exceeds PDF page count ({max_pages})")

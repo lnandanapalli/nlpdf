@@ -7,9 +7,7 @@ import structlog
 
 
 def setup_logging(log_level: int = logging.INFO) -> None:
-    """
-    Configure structlog and standard logging.
-    """
+    """Configure structlog and standard logging."""
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,

@@ -7,7 +7,7 @@ import pytest
 from backend.services.markdown_service import markdown_to_pdf
 
 
-@pytest.fixture()
+@pytest.fixture
 def md_file(tmp_path: Path) -> Path:
     """Create a sample markdown file."""
     md_path = tmp_path / "sample.md"
@@ -25,7 +25,7 @@ def md_file(tmp_path: Path) -> Path:
     return md_path
 
 
-@pytest.fixture()
+@pytest.fixture
 def md_with_tables(tmp_path: Path) -> Path:
     """Create a markdown file with tables and code blocks."""
     md_path = tmp_path / "tables.md"

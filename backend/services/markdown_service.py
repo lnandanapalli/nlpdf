@@ -1,11 +1,10 @@
 """Markdown to PDF conversion service using markdown and xhtml2pdf."""
 
-import structlog
 from pathlib import Path
 
-from xhtml2pdf import pisa
-
 import markdown
+import structlog
+from xhtml2pdf import pisa
 
 from backend.services.pdf_fonts import register_fonts
 
@@ -70,9 +69,7 @@ PAPER_SIZES = {
 }
 
 
-def markdown_to_pdf(
-    input_path: Path, output_path: Path, paper_size: str = "A4"
-) -> Path:
+def markdown_to_pdf(input_path: Path, output_path: Path, paper_size: str = "A4") -> Path:
     """
     Convert a markdown file to PDF.
 
@@ -105,7 +102,7 @@ def markdown_to_pdf(
         f"</head><body>{html_body}</body></html>"
     )
 
-    with open(output_path, "wb") as f:
+    with output_path.open("wb") as f:
         status = pisa.CreatePDF(html, dest=f)
 
     if status.err:

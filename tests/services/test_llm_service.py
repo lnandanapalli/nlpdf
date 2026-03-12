@@ -3,8 +3,8 @@
 import json
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi import HTTPException
+import pytest
 
 from backend.services.llm_service import _extract_json
 
@@ -27,9 +27,7 @@ class TestExtractJson:
         assert json.loads(result) == {"operation": "merge", "parameters": {}}
 
     def test_bare_code_fence(self):
-        text = (
-            '```\n{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}\n```'
-        )
+        text = '```\n{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}\n```'
         result = _extract_json(text)
         parsed = json.loads(result)
         assert parsed["operation"] == "rotate"
@@ -46,7 +44,7 @@ class TestExtractJson:
 class TestProcessMessage:
     """Tests for LLMService.process_message with mocked LLM calls."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def llm_service(self):
         """Create LLMService with a mocked client."""
         with patch("backend.services.llm_service.settings") as mock_settings:
@@ -80,9 +78,7 @@ class TestProcessMessage:
 
     async def test_fallback_single_object_wrapped_in_list(self, llm_service):
         # LLM returns a plain object instead of an array
-        response_json = (
-            '{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}'
-        )
+        response_json = '{"operation": "rotate", "parameters": {"rotations": [[1, 90]]}}'
         llm_service._call_llm = AsyncMock(return_value=response_json)
 
         result = await llm_service.process_message("rotate page 1")
@@ -142,9 +138,7 @@ class TestProcessMessage:
 
     async def test_huggingface_failure_falls_back_to_openai(self, llm_service):
         """If HuggingFace raises, _call_openai is used and returns a valid result."""
-        llm_service.client.chat_completion = AsyncMock(
-            side_effect=Exception("HF exploded")
-        )
+        llm_service.client.chat_completion = AsyncMock(side_effect=Exception("HF exploded"))
         llm_service._call_openai = AsyncMock(
             return_value='[{"operation": "compress", "parameters": {"level": 2}}]'
         )
@@ -162,9 +156,7 @@ class TestProcessMessage:
 
     async def test_huggingface_failure_no_openai_key_raises_503(self, llm_service):
         """If HuggingFace fails and OPENAI_API_KEY is not set, raises 503."""
-        llm_service.client.chat_completion = AsyncMock(
-            side_effect=Exception("HF exploded")
-        )
+        llm_service.client.chat_completion = AsyncMock(side_effect=Exception("HF exploded"))
         # OPENAI_API_KEY is None from the fixture
 
         with pytest.raises(HTTPException) as exc_info:
@@ -174,9 +166,7 @@ class TestProcessMessage:
 
     async def test_huggingface_and_openai_both_fail_raises_503(self, llm_service):
         """If both HuggingFace and OpenAI fail, raises 503."""
-        llm_service.client.chat_completion = AsyncMock(
-            side_effect=Exception("HF exploded")
-        )
+        llm_service.client.chat_completion = AsyncMock(side_effect=Exception("HF exploded"))
         llm_service._call_openai = AsyncMock(
             side_effect=HTTPException(
                 status_code=503,

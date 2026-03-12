@@ -2,8 +2,8 @@
 
 import zipfile
 
-import pytest
 from pypdf import PdfReader
+import pytest
 
 from backend.services.split_service import split_pdf
 
@@ -37,9 +37,7 @@ class TestSplitPdfNoMerge:
 
     def test_creates_zip(self, sample_pdf, tmp_path):
         output = tmp_path / "result.zip"
-        result = split_pdf(
-            sample_pdf, [(1, 2), (4, 5)], merge=False, output_path=output
-        )
+        result = split_pdf(sample_pdf, [(1, 2), (4, 5)], merge=False, output_path=output)
 
         assert result == output
         assert output.exists()

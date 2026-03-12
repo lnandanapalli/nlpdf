@@ -4,6 +4,8 @@ from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 
+MAX_PDF_PAGES = 5000
+
 
 def rotate_pdf(
     input_path: Path,
@@ -28,15 +30,13 @@ def rotate_pdf(
     writer = PdfWriter()
     total_pages = len(reader.pages)
 
-    if total_pages > 5000:
-        raise ValueError("PDF exceeds maximum page count (5000)")
+    if total_pages > MAX_PDF_PAGES:
+        raise ValueError(f"PDF exceeds maximum page count ({MAX_PDF_PAGES})")
 
     # Validate page numbers against actual PDF page count (1-indexed)
     for page_num, _ in rotation_specs:
         if page_num > total_pages:
-            raise ValueError(
-                f"Page number {page_num} exceeds PDF page count ({total_pages})"
-            )
+            raise ValueError(f"Page number {page_num} exceeds PDF page count ({total_pages})")
 
     # Create a dict of page rotations (convert to 0-indexed)
     rotations = {}
@@ -46,12 +46,14 @@ def rotate_pdf(
         rotations[page_idx] = angle
 
     # Process all pages
-    for page_index, page in enumerate(reader.pages):
+    for page_index, orig_page in enumerate(reader.pages):
         if page_index in rotations:
-            page = page.rotate(rotations[page_index])
-        writer.add_page(page)
+            rotated_page = orig_page.rotate(rotations[page_index])
+            writer.add_page(rotated_page)
+        else:
+            writer.add_page(orig_page)
 
-    with open(output_path, "wb") as output_file:
+    with output_path.open("wb") as output_file:
         writer.write(output_file)
 
     return output_path

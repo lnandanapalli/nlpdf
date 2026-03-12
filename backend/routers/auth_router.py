@@ -1,9 +1,9 @@
-"""Authentication router: signup, login, and current user."""
+"""Authentication router: signup, login, sessions, and account management."""
 
+from datetime import UTC, datetime, timedelta
+import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
-
-import structlog
+from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
@@ -14,18 +14,32 @@ from fastapi import (
     Response,
     status,
 )
+import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from backend.auth.cookies import clear_auth_cookies, set_auth_cookies
-from backend.auth.dependencies import get_current_user
+from backend.auth.dependencies import get_current_session_id, get_current_user
 from backend.auth.jwt import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
 )
 from backend.auth.password import hash_password, verify_password
+from backend.config import settings
+from backend.crud.session_crud import (
+    SessionCreate,
+    create_session,
+    delete_all_user_sessions,
+    delete_session_by_id,
+    delete_session_by_jti,
+    get_active_sessions_for_user,
+    get_session_by_jti,
+    rotate_session_jti,
+)
 from backend.crud.user_crud import (
-    clear_refresh_token_jti,
+    MAX_OTP_ATTEMPTS,
+    bump_token_version,
     create_user,
     delete_user,
     get_user_by_email,
@@ -33,7 +47,6 @@ from backend.crud.user_crud import (
     mark_user_verified,
     record_failed_login,
     reset_failed_logins,
-    update_refresh_token_jti,
     update_user_name,
     update_user_otp,
     update_user_password,
@@ -47,12 +60,14 @@ from backend.schemas.auth_schema import (
     DeleteAccountRequest,
     LoginRequest,
     ResendOTPRequest,
+    SessionResponse,
     SignupRequest,
     SuccessResponse,
     UpdateProfileRequest,
     UserResponse,
     VerifyOTPRequest,
 )
+from backend.security import get_client_ip, parse_device_info
 from backend.services.email_service import (
     send_account_deletion_otp_email,
     send_otp_email,
@@ -63,19 +78,120 @@ logger = structlog.get_logger("nlpdf.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# ---------------------------------------------------------------------------
+# Dependency type aliases — modern FastAPI Annotated pattern (FAST001)
+# ---------------------------------------------------------------------------
+
+DB = Annotated[AsyncSession, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentSessionId = Annotated[int | None, Depends(get_current_session_id)]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 
 def generate_otp() -> str:
     """Generate a cryptographically secure random 6-digit OTP."""
     return str(secrets.randbelow(900000) + 100000)
 
 
-@router.post("/signup", response_model=SuccessResponse, status_code=201)
+def _session_expires_at() -> datetime:
+    """Compute the refresh token / session expiry datetime."""
+    return datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+
+
+def _normalize_tz(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware, assuming UTC if naive."""
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
+def _validate_refresh_payload(payload: dict[str, Any]) -> tuple[str, str]:
+    """Extract and validate sub and jti claims from a decoded token payload.
+
+    Raises:
+        ValueError: If either claim is missing.
+    """
+    email: str | None = payload.get("sub")
+    jti: str | None = payload.get("jti")
+    if not email or not jti:
+        raise ValueError("Missing claims")
+    return email, jti
+
+
+async def _create_token_pair_and_session(
+    db: AsyncSession,
+    user: User,
+    request: Request,
+    response: Response,
+) -> None:
+    """Issue a new access+refresh token pair, record a session row, and set cookies.
+
+    Order matters:
+      1. Create refresh token first (to get the JTI)
+      2. Flush session to get session.id
+      3. Create access token embedding both token_version and session_id
+      4. Set cookies
+    """
+    # 1. Refresh token (has JTI)
+    refresh, jti = create_refresh_token({"sub": user.email})
+    expires_at = _session_expires_at()
+
+    # 2. Session row
+    ua_string = request.headers.get("User-Agent", "")
+    device = parse_device_info(ua_string)
+    ip = get_client_ip(request)
+
+    sess = await create_session(
+        db=db,
+        data=SessionCreate(
+            user_id=user.id,
+            jti=jti,
+            expires_at=expires_at,
+            ip_address=ip,
+            device_name=device["device_name"],
+            browser=device["browser"],
+            os=device["os"],
+            is_mobile=device["is_mobile"],
+            user_agent=ua_string[:512],
+        ),
+    )
+
+    # 3. Access token — embeds token_version (C3) and session_id (for sessions list)
+    access = create_access_token(
+        {
+            "sub": user.email,
+            "ver": user.token_version or 0,
+            "sid": sess.id,
+        }
+    )
+
+    # 4. Set cookies
+    set_auth_cookies(response, access, refresh)
+
+
+def _check_otp_expiry(otp_expires_at: datetime) -> None:
+    """Raise HTTP 401 if the OTP has expired."""
+    if _normalize_tz(otp_expires_at) < datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Verification code has expired",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Signup / OTP verification
+# ---------------------------------------------------------------------------
+
+
+@router.post("/signup", status_code=201)
 async def signup(
     body: SignupRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: DB,
 ) -> SuccessResponse:
-    """Register a new user and return success message requiring OTP verification."""
+    """Register a new user and send an OTP verification email."""
     if not await verify_turnstile(body.cf_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -90,41 +206,40 @@ async def signup(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with this email already exists",
             )
-        else:
-            # Reusing unverified account
-            hashed = hash_password(body.password)
-            existing.hashed_password = hashed
-            existing.first_name = body.first_name
-            existing.last_name = body.last_name
-            await db.commit()
-            user = existing
+        # Reuse unverified slot — update credentials
+        existing.hashed_password = hash_password(body.password)
+        existing.first_name = body.first_name
+        existing.last_name = body.last_name
+        user = existing
     else:
-        hashed = hash_password(body.password)
         user = await create_user(
-            db, body.email, hashed, body.first_name, body.last_name
+            db,
+            body.email,
+            hash_password(body.password),
+            body.first_name,
+            body.last_name,
         )
 
     otp_code = generate_otp()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
     await update_user_otp(db, user, otp_code, expires_at)
-
     background_tasks.add_task(send_otp_email, str(user.email), otp_code)
 
     return SuccessResponse(message="Verification code sent to email")
 
 
-@router.post("/verify_otp", response_model=SuccessResponse)
+@router.post("/verify_otp")
 async def verify_otp(
-    body: VerifyOTPRequest, response: Response, db: AsyncSession = Depends(get_db)
+    body: VerifyOTPRequest,
+    request: Request,
+    response: Response,
+    db: DB,
 ) -> SuccessResponse:
-    """Verify an OTP code, set auth cookies, and return success."""
+    """Verify OTP, mark account verified, issue tokens, and create a session."""
     user = await get_user_by_email(db, body.email)
 
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if user.is_verified:
         raise HTTPException(
@@ -138,59 +253,45 @@ async def verify_otp(
             detail="No active verification code. Please request a new one.",
         )
 
-    if (user.otp_attempts or 0) >= 5:
+    if (user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many failed attempts. Please request a new code.",
         )
 
-    expires_at = (
-        user.otp_expires_at.replace(tzinfo=timezone.utc)
-        if user.otp_expires_at.tzinfo is None
-        else user.otp_expires_at
-    )
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Verification code has expired",
-        )
+    _check_otp_expiry(user.otp_expires_at)
 
-    if user.otp_code != body.otp_code:
-        await increment_otp_attempts(db, user)
-        remaining = 5 - (user.otp_attempts or 0)
-        if remaining <= 0:
-            detail = "Too many failed attempts. Please request a new code."
-        else:
-            detail = "Invalid verification code"
+    # C4: constant-time comparison to prevent timing side-channel attack
+    if not hmac.compare_digest(str(user.otp_code), body.otp_code):
+        new_attempts = await increment_otp_attempts(db, user)
+        if new_attempts >= MAX_OTP_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed attempts. Please request a new code.",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=detail,
+            detail="Invalid verification code",
         )
 
     await mark_user_verified(db, user)
-    access = create_access_token({"sub": user.email})
-    refresh, jti = create_refresh_token({"sub": user.email})
-    await update_refresh_token_jti(db, user, jti)
-    set_auth_cookies(response, access, refresh)
+    await _create_token_pair_and_session(db, user, request, response)
     return SuccessResponse(message="Email verified successfully")
 
 
-@router.post("/resend_otp", response_model=SuccessResponse)
+@router.post("/resend_otp")
 @limiter.limit("3/10minutes")
 async def resend_otp(
     request: Request,
     body: ResendOTPRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: DB,
 ) -> SuccessResponse:
     """Generate and send a new OTP code to an unverified email."""
     user = await get_user_by_email(db, body.email)
 
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if user.is_verified:
         raise HTTPException(
@@ -199,18 +300,27 @@ async def resend_otp(
         )
 
     otp_code = generate_otp()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
     await update_user_otp(db, user, otp_code, expires_at)
     background_tasks.add_task(send_otp_email, str(user.email), otp_code)
 
     return SuccessResponse(message="Verification code resent to email")
 
 
-@router.post("/login", response_model=SuccessResponse)
+# ---------------------------------------------------------------------------
+# Login / Logout / Refresh
+# ---------------------------------------------------------------------------
+
+
+@router.post("/login")
+@limiter.limit("10/minute")
 async def login(
-    body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request,
+    body: LoginRequest,
+    response: Response,
+    db: DB,
 ) -> SuccessResponse:
-    """Authenticate a user, set auth cookies, and return success."""
+    """Authenticate a user, create a session, set auth cookies, and return success."""
     if not await verify_turnstile(body.cf_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -227,21 +337,16 @@ async def login(
 
     # Check account lockout
     if user.locked_until is not None:
-        locked_until = (
-            user.locked_until.replace(tzinfo=timezone.utc)
-            if user.locked_until.tzinfo is None
-            else user.locked_until
-        )
-        if locked_until > datetime.now(timezone.utc):
+        locked_until = _normalize_tz(user.locked_until)
+        if locked_until > datetime.now(UTC):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Account temporarily locked due to too many failed "
                 "login attempts. Please try again later.",
             )
-        # Lock period expired — reset
         await reset_failed_logins(db, user)
 
-    if not verify_password(body.password, str(user.hashed_password)):
+    if not verify_password(body.password, user.hashed_password):
         await record_failed_login(db, user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -255,39 +360,31 @@ async def login(
         )
 
     await reset_failed_logins(db, user)
-    access = create_access_token({"sub": user.email})
-    refresh, jti = create_refresh_token({"sub": user.email})
-    await update_refresh_token_jti(db, user, jti)
-    set_auth_cookies(response, access, refresh)
+    await _create_token_pair_and_session(db, user, request, response)
     return SuccessResponse(message="Login successful")
 
 
-@router.post("/refresh", response_model=SuccessResponse)
+@router.post("/refresh")
 async def refresh(
-    request: Request, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request,
+    response: Response,
+    db: DB,
 ) -> SuccessResponse:
-    """Exchange a valid refresh token cookie for a new token pair (one-time use)."""
+    """Rotate the refresh token and issue a new access token (one-time use per session)."""
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing refresh token",
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token"
         )
 
     try:
         payload = decode_refresh_token(refresh_token)
-        email: str | None = payload.get("sub")
-        jti: str | None = payload.get("jti")
-        if email is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-            )
-    except Exception:
+        email, jti = _validate_refresh_payload(payload)
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
-        )
+        ) from exc
 
     user = await get_user_by_email(db, email)
     if user is None:
@@ -296,61 +393,88 @@ async def refresh(
             detail="Invalid or expired refresh token",
         )
 
-    # Validate JTI — reject reused tokens (one-time use)
-    if jti is None or user.refresh_token_jti != jti:
-        # Possible token theft — revoke all refresh tokens for this user
-        await clear_refresh_token_jti(db, user)
+    session = await get_session_by_jti(db, jti)
+    if session is None or session.user_id != user.id:
+        # JTI mismatch — possible token theft → nuke all sessions for this user
+        await delete_all_user_sessions(db, user.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    new_access = create_access_token({"sub": email})
+    # Rotate: new JTI, same session row (preserves device info / created_at)
     new_refresh, new_jti = create_refresh_token({"sub": email})
-    await update_refresh_token_jti(db, user, new_jti)
+    new_expires = _session_expires_at()
+    await rotate_session_jti(db, session, new_jti, new_expires)
+
+    new_access = create_access_token(
+        {
+            "sub": email,
+            "ver": user.token_version or 0,
+            "sid": session.id,
+        }
+    )
     set_auth_cookies(response, new_access, new_refresh)
     return SuccessResponse(message="Tokens refreshed")
 
 
-@router.post("/logout", response_model=SuccessResponse)
+@router.post("/logout")
 async def logout(
+    request: Request,
     response: Response,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DB,
 ) -> SuccessResponse:
-    """Log out the current user by revoking tokens and clearing cookies."""
-    await clear_refresh_token_jti(db, current_user)
+    """Log out this device only — deletes the current session, clears cookies."""
+    # Identify and delete only this session (other devices unaffected)
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        try:
+            payload = decode_refresh_token(refresh_token)
+            jti = payload.get("jti")
+            if jti:
+                await delete_session_by_jti(db, jti)
+        except jwt.InvalidTokenError as exc:
+            logger.debug("logout_refresh_token_decode_failed", error=str(exc))
+
     clear_auth_cookies(response)
+    logger.info("logout", user_id=current_user.id)
     return SuccessResponse(message="Logged out successfully")
 
 
-@router.get("/me", response_model=UserResponse)
-async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
+# ---------------------------------------------------------------------------
+# Current user / profile
+# ---------------------------------------------------------------------------
+
+
+@router.get("/me")
+async def me(current_user: CurrentUser) -> UserResponse:
     """Return the currently authenticated user."""
     return UserResponse.model_validate(current_user)
 
 
-@router.put("/profile", response_model=UserResponse)
+@router.put("/profile")
 async def update_profile(
     body: UpdateProfileRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DB,
 ) -> UserResponse:
-    """Update the current user's profile information."""
+    """Update the current user's display name."""
     await update_user_name(db, current_user, body.first_name, body.last_name)
     logger.info("profile_updated", user_id=current_user.id)
     return UserResponse.model_validate(current_user)
 
 
-@router.post("/change-password", response_model=SuccessResponse)
+@router.post("/change-password")
 async def change_password(
     body: ChangePasswordRequest,
+    request: Request,
     response: Response,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DB,
 ) -> SuccessResponse:
-    """Change the current user's password. Invalidates other sessions."""
-    if not verify_password(body.current_password, str(current_user.hashed_password)):
+    """Change password — revokes ALL sessions and access tokens, re-issues for current device."""
+    if not verify_password(body.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -362,53 +486,111 @@ async def change_password(
             detail="New password must be different from current password",
         )
 
-    hashed = hash_password(body.new_password)
-    await update_user_password(db, current_user, hashed)
+    await update_user_password(db, current_user, hash_password(body.new_password))
+
+    # Revoke everything — delete all sessions and bump token_version
+    await delete_all_user_sessions(db, current_user.id)
+    await bump_token_version(db, current_user)
+
+    # Re-issue tokens for the current device only
+    await _create_token_pair_and_session(db, current_user, request, response)
+
     logger.info("password_changed", user_id=current_user.id)
-
-    # Re-issue tokens for current session; old JTI is overwritten so other sessions
-    # will fail to refresh (effectively logging them out).
-    access = create_access_token({"sub": current_user.email})
-    refresh_tok, jti = create_refresh_token({"sub": current_user.email})
-    await update_refresh_token_jti(db, current_user, jti)
-    set_auth_cookies(response, access, refresh_tok)
-
     return SuccessResponse(message="Password changed successfully")
 
 
-@router.post("/delete-account/request", response_model=SuccessResponse)
+# ---------------------------------------------------------------------------
+# Session management (Google/Microsoft-style "Active sessions" settings page)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/sessions")
+async def list_sessions(
+    current_user: CurrentUser,
+    current_session_id: CurrentSessionId,
+    db: DB,
+) -> list[SessionResponse]:
+    """List all active sessions for the current user, marking the calling session."""
+    sessions = await get_active_sessions_for_user(db, current_user.id)
+    return [
+        SessionResponse(
+            id=s.id,
+            ip_address=s.ip_address,
+            device_name=s.device_name,
+            browser=s.browser,
+            os=s.os,
+            is_mobile=bool(s.is_mobile),
+            created_at=s.created_at,
+            last_used_at=s.last_used_at,
+            is_current=(s.id == current_session_id),
+        )
+        for s in sessions
+    ]
+
+
+@router.delete("/sessions/{session_id}")
+async def terminate_session(
+    session_id: int,
+    current_user: CurrentUser,
+    db: DB,
+) -> SuccessResponse:
+    """Terminate a specific session (remote logout from another device)."""
+    await delete_session_by_id(db, session_id, current_user.id)
+    logger.info("session_terminated", user_id=current_user.id, session_id=session_id)
+    return SuccessResponse(message="Session terminated")
+
+
+@router.post("/sessions/logout-all")
+async def logout_all_sessions(
+    request: Request,
+    response: Response,
+    current_user: CurrentUser,
+    db: DB,
+) -> SuccessResponse:
+    """Revoke all sessions and access tokens, then re-login this device."""
+    await delete_all_user_sessions(db, current_user.id)
+    await bump_token_version(db, current_user)
+    await _create_token_pair_and_session(db, current_user, request, response)
+    logger.info("all_sessions_revoked", user_id=current_user.id)
+    return SuccessResponse(message="All other sessions have been terminated")
+
+
+# ---------------------------------------------------------------------------
+# Account deletion
+# ---------------------------------------------------------------------------
+
+
+@router.post("/delete-account/request")
 @limiter.limit("3/10minutes")
 async def request_account_deletion(
     request: Request,
     body: DeleteAccountRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DB,
 ) -> SuccessResponse:
     """Verify password and send an OTP to confirm account deletion."""
-    if not verify_password(body.password, str(current_user.hashed_password)):
+    if not verify_password(body.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password is incorrect",
         )
 
     otp_code = generate_otp()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
     await update_user_otp(db, current_user, otp_code, expires_at)
-
-    background_tasks.add_task(
-        send_account_deletion_otp_email, str(current_user.email), otp_code
-    )
-
+    background_tasks.add_task(send_account_deletion_otp_email, str(current_user.email), otp_code)
     return SuccessResponse(message="Confirmation code sent to your email")
 
 
-@router.post("/delete-account/confirm", response_model=SuccessResponse)
+@router.post("/delete-account/confirm")
+@limiter.limit("5/10minutes")
 async def confirm_account_deletion(
+    request: Request,
     body: DeleteAccountConfirmRequest,
     response: Response,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DB,
 ) -> SuccessResponse:
     """Confirm account deletion by verifying the OTP code."""
     if current_user.otp_code is None or current_user.otp_expires_at is None:
@@ -417,33 +599,33 @@ async def confirm_account_deletion(
             detail="No active confirmation code. Please request account deletion first.",
         )
 
-    if (current_user.otp_attempts or 0) >= 5:
+    if (current_user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many failed attempts. Please request a new code.",
         )
 
-    expires_at = (
-        current_user.otp_expires_at.replace(tzinfo=timezone.utc)
-        if current_user.otp_expires_at.tzinfo is None
-        else current_user.otp_expires_at
-    )
-    if expires_at < datetime.now(timezone.utc):
+    if _normalize_tz(current_user.otp_expires_at) < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation code has expired. Please request a new one.",
         )
 
-    if current_user.otp_code != body.otp_code:
-        await increment_otp_attempts(db, current_user)
+    # C4: constant-time comparison
+    if not hmac.compare_digest(str(current_user.otp_code), body.otp_code):
+        new_attempts = await increment_otp_attempts(db, current_user)
+        if new_attempts >= MAX_OTP_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed attempts. Please request a new code.",
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid confirmation code",
         )
 
     user_id = current_user.id
-    await delete_user(db, current_user)
+    await delete_user(db, current_user)  # cascade deletes sessions + documents
     clear_auth_cookies(response)
     logger.info("account_deleted", user_id=user_id)
-
     return SuccessResponse(message="Account deleted successfully")

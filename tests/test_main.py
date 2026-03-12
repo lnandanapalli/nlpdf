@@ -1,12 +1,12 @@
 """Tests for the main app endpoints (root and health)."""
 
-import pytest
 from httpx import ASGITransport, AsyncClient
+import pytest
 
 from backend.main import app as main_app
 
 
-@pytest.fixture()
+@pytest.fixture
 async def client():
     """Async test client for the main app."""
     transport = ASGITransport(app=main_app)

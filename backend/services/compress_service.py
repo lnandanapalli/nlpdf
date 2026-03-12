@@ -1,18 +1,20 @@
 """PDF compression service using pikepdf and Pillow."""
 
 import io
-import structlog
 from pathlib import Path
 
 import pikepdf
-from pikepdf import Stream
+from pikepdf import PdfImage, Stream
 from PIL import Image
+import structlog
 
 logger = structlog.get_logger(__name__)
 
 # Level -> scale factor (how much of original to keep)
 SCALE_FACTORS = {1: 0.6, 2: 0.4, 3: 0.2}
 JPEG_QUALITY = 40
+MAX_PDF_PAGES = 5000
+MIN_IMAGE_DIMENSION = 50  # Skip tiny images — not worth recompressing
 
 
 def compress_pdf(input_path: Path, output_path: Path, level: int) -> Path:
@@ -30,8 +32,8 @@ def compress_pdf(input_path: Path, output_path: Path, level: int) -> Path:
     scale = SCALE_FACTORS[level]
 
     with pikepdf.open(input_path) as pdf:
-        if len(pdf.pages) > 5000:
-            raise ValueError("PDF exceeds maximum page count (5000)")
+        if len(pdf.pages) > MAX_PDF_PAGES:
+            raise ValueError(f"PDF exceeds maximum page count ({MAX_PDF_PAGES})")
 
         for page in pdf.pages:
             _compress_page_images(page, scale)
@@ -45,15 +47,15 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
     """Compress all images on a page."""
     try:
         images = page.images
-    except Exception:
+    except Exception:  # noqa: BLE001 — pikepdf raises undocumented C-level exceptions
         return
 
     for name in list(images.keys()):
         try:
             raw_stream: Stream = images[name]  # type: ignore[assignment]
-            pdf_image = pikepdf.PdfImage(raw_stream)
+            pdf_image = PdfImage(raw_stream)
 
-            if pdf_image.width < 50 or pdf_image.height < 50:
+            if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
                 continue
 
             current_filter = raw_stream.get("/Filter")
@@ -62,7 +64,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
             else:
                 _compress_to_jpeg(raw_stream, pdf_image, scale)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-image failures are non-fatal
             logger.debug(
                 "Failed to compress image '%s': %s: %s",
                 name,
@@ -72,7 +74,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
             continue
 
 
-def _recompress_jpeg(raw_stream, pdf_image, scale: float) -> None:
+def _recompress_jpeg(raw_stream: Stream, pdf_image: PdfImage, scale: float) -> None:
     """Recompress an existing JPEG image."""
     raw_bytes = raw_stream.read_raw_bytes()
     original_size = len(bytes(raw_bytes))
@@ -95,7 +97,7 @@ def _recompress_jpeg(raw_stream, pdf_image, scale: float) -> None:
     raw_stream.Height = new_h
 
 
-def _compress_to_jpeg(raw_stream, pdf_image, scale: float) -> None:
+def _compress_to_jpeg(raw_stream: Stream, pdf_image: PdfImage, scale: float) -> None:
     """Compress a non-JPEG image to JPEG."""
     pil_image = pdf_image.as_pil_image()
 

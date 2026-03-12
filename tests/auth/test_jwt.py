@@ -1,6 +1,6 @@
 """Tests for JWT token creation and verification."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import jwt as pyjwt
 import pytest
@@ -83,7 +83,7 @@ class TestDecodeAccessToken:
         expired_payload = {
             "sub": "expired@test.com",
             "type": "access",
-            "exp": datetime(2020, 1, 1, tzinfo=timezone.utc),
+            "exp": datetime(2020, 1, 1, tzinfo=UTC),
         }
         token = pyjwt.encode(
             expired_payload,
@@ -121,7 +121,7 @@ class TestDecodeRefreshToken:
         expired_payload = {
             "sub": "expired@test.com",
             "type": "refresh",
-            "exp": datetime(2020, 1, 1, tzinfo=timezone.utc),
+            "exp": datetime(2020, 1, 1, tzinfo=UTC),
         }
         token = pyjwt.encode(
             expired_payload,

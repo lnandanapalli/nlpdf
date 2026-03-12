@@ -14,10 +14,9 @@ class SplitParams(BaseModel):
         "Example: [[1, 5], [7, 10]] means pages 1-5 and 7-10",
     )
     merge: bool = Field(
-        True,
+        default=True,
         description=(
-            "If True, merge ranges into one PDF; "
-            "if False, return ZIP of separate PDFs"
+            "If True, merge ranges into one PDF; " "if False, return ZIP of separate PDFs"
         ),
     )
 

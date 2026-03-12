@@ -5,7 +5,6 @@ from pathlib import Path
 from reportlab.lib.fonts import addMapping
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-
 import xhtml2pdf.default
 
 _FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
@@ -24,18 +23,14 @@ def register_fonts() -> None:
 
     # Register TTF fonts with reportlab
     pdfmetrics.registerFont(TTFont("DejaVuSans", str(_FONTS_DIR / "DejaVuSans.ttf")))
-    pdfmetrics.registerFont(
-        TTFont("DejaVuSans-Bold", str(_FONTS_DIR / "DejaVuSans-Bold.ttf"))
-    )
+    pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", str(_FONTS_DIR / "DejaVuSans-Bold.ttf")))
     pdfmetrics.registerFont(
         TTFont("DejaVuSans-Oblique", str(_FONTS_DIR / "DejaVuSans-Oblique.ttf"))
     )
     pdfmetrics.registerFont(
         TTFont("DejaVuSans-BoldOblique", str(_FONTS_DIR / "DejaVuSans-BoldOblique.ttf"))
     )
-    pdfmetrics.registerFont(
-        TTFont("DejaVuSansMono", str(_FONTS_DIR / "DejaVuSansMono.ttf"))
-    )
+    pdfmetrics.registerFont(TTFont("DejaVuSansMono", str(_FONTS_DIR / "DejaVuSansMono.ttf")))
     pdfmetrics.registerFont(
         TTFont("DejaVuSansMono-Bold", str(_FONTS_DIR / "DejaVuSansMono-Bold.ttf"))
     )

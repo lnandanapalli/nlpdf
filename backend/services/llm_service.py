@@ -2,12 +2,12 @@
 
 import asyncio
 import json
-import structlog
 from typing import Any
 
-import httpx
 from fastapi import HTTPException
+import httpx
 from huggingface_hub import AsyncInferenceClient
+import structlog
 
 from backend.config import settings
 from backend.prompts import SYSTEM_PROMPT
@@ -19,7 +19,8 @@ logger = structlog.get_logger(__name__)
 class LLMService:
     """Service for interacting with HuggingFace Inference API."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialise the HuggingFace async inference client."""
         self.client = AsyncInferenceClient(
             token=settings.HUGGINGFACE_API_TOKEN,
             timeout=settings.HUGGINGFACE_TIMEOUT,
@@ -32,8 +33,9 @@ class LLMService:
         pdf_metadata: dict[str, Any] | None = None,
         retry_context: str | None = None,
     ) -> str:
-        """
-        Single LLM API call. Tries HuggingFace first; falls back to OpenAI
+        """Single LLM API call.
+
+        Tries HuggingFace first; falls back to OpenAI
         only if HuggingFace returns a 429 rate-limit error and OPENAI_API_KEY
         is configured. Returns raw text response.
 
@@ -71,21 +73,22 @@ class LLMService:
             )
             content = response.choices[0].message.content
             if content is None:
-                raise ValueError("LLM returned empty content")
+                msg = "LLM returned empty content"
+                raise ValueError(msg)  # noqa: TRY301 — extracted is more confusing here
             return content.strip()
-        except Exception as e:
+        except Exception as e:  # BLE001: LLM SDK + HTTP can raise many types;
+            # we log+fall-back to OpenAI or raise 503, so the broad catch is intentional
             if settings.OPENAI_API_KEY:
                 logger.warning("HuggingFace failed (%s). Falling back to OpenAI.", e)
                 return await self._call_openai(messages)
-            logger.error("LLM API call failed: %s", e)
+            logger.exception("LLM API call failed")
             raise HTTPException(
                 status_code=503,
                 detail="LLM service unavailable. Please try again later.",
-            )
+            ) from None
 
     async def _call_openai(self, messages: list[dict]) -> str:
-        """
-        OpenAI Chat Completions fallback call.
+        """OpenAI Chat Completions fallback call.
 
         Raises:
             HTTPException: If the OpenAI call fails.
@@ -106,23 +109,23 @@ class LLMService:
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
             if not content:
-                raise ValueError("OpenAI returned empty content")
+                msg = "OpenAI returned empty content"
+                raise ValueError(msg)  # noqa: TRY301 — extracted is more confusing here
             logger.info("LLM response from OpenAI fallback")
             return content.strip()
-        except Exception as e:
-            logger.error("OpenAI fallback failed: %s", e)
+        except Exception:  # BLE001 — httpx + OpenAI response errors are diverse
+            logger.exception("OpenAI fallback failed")
             raise HTTPException(
                 status_code=503,
                 detail="LLM service unavailable. Please try again later.",
-            )
+            ) from None
 
     async def process_message(
         self,
         user_message: str,
         pdf_metadata: dict[str, Any] | None = None,
     ) -> list[OperationType]:
-        """
-        Generate and validate operations from a user message.
+        """Generate and validate operations from a user message.
 
         Retries up to LLM_MAX_RETRIES times on parse/validation
         failures, feeding the error back to the LLM each time.
@@ -191,8 +194,7 @@ class LLMService:
         )
         raise HTTPException(
             status_code=400,
-            detail="Could not understand your request. "
-            "Please try rephrasing your instruction.",
+            detail="Could not understand your request. " "Please try rephrasing your instruction.",
         )
 
 
@@ -228,13 +230,13 @@ def _parse_json(text: str) -> Any:
     return None
 
 
-# Singleton LLM service instance
+# Module-level singleton — instantiated lazily on first request
 _llm_service: LLMService | None = None
 
 
 def get_llm_service() -> LLMService:
-    """Dependency: Yields the application LLM Service."""
-    global _llm_service
+    """Dependency: return (and lazily create) the application LLM Service."""
+    global _llm_service  # noqa: PLW0603 — intentional module-level singleton
     if _llm_service is None:
         _llm_service = LLMService()
     return _llm_service
