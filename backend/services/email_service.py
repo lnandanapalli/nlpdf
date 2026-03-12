@@ -6,6 +6,7 @@ import resend
 import structlog
 
 from backend.config import settings
+from backend.utils.email_utils import mask_email
 
 logger = structlog.get_logger(__name__)
 
@@ -32,8 +33,8 @@ def send_otp_email(to_email: str, otp_code: str) -> None:
 
     try:
         resend.Emails.send(params)
-    except Exception:  # resend SDK raises unspecified exception types
-        logger.exception("Failed to send email", to_email=to_email)
+    except Exception:
+        logger.exception("Failed to send email", to_email=mask_email(to_email))
 
 
 def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
@@ -58,5 +59,5 @@ def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
 
     try:
         resend.Emails.send(params)
-    except Exception:  # resend SDK raises unspecified exception types
-        logger.exception("Failed to send deletion OTP email", to_email=to_email)
+    except Exception:
+        logger.exception("Failed to send deletion OTP email", to_email=mask_email(to_email))

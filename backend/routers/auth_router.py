@@ -176,7 +176,7 @@ def _check_otp_expiry(otp_expires_at: datetime) -> None:
     if _normalize_tz(otp_expires_at) < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Verification code has expired",
+            detail="Invalid or expired verification code",
         )
 
 
@@ -289,7 +289,7 @@ async def verify_otp(
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid verification code",
+            detail="Invalid or expired verification code",
         )
 
     await mark_user_verified(db, user)
@@ -631,7 +631,7 @@ async def confirm_account_deletion(
     if _normalize_tz(current_user.otp_expires_at) < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirmation code has expired. Please request a new one.",
+            detail="Invalid or expired confirmation code.",
         )
 
     # C4: constant-time comparison
@@ -644,7 +644,7 @@ async def confirm_account_deletion(
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid confirmation code",
+            detail="Invalid or expired confirmation code.",
         )
 
     user_id = current_user.id
