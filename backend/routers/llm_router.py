@@ -148,12 +148,15 @@ async def process_with_llm(
         return sanitized or "document"
 
     try:
+        current_total_size = 0
         # 1. Validate and save uploaded files
         for file, in_path in zip(files, input_paths, strict=True):
             if is_markdown:
-                await validate_and_save_markdown(file, in_path)
+                current_total_size = await validate_and_save_markdown(
+                    file, in_path, current_total_size
+                )
             else:
-                await validate_and_save_pdf(file, in_path)
+                current_total_size = await validate_and_save_pdf(file, in_path, current_total_size)
 
         # 2. Extract metadata for LLM context
         total_pages, total_size = await _gather_metadata(input_paths, is_markdown=is_markdown)

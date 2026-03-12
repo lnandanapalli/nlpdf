@@ -16,6 +16,7 @@ logger = structlog.get_logger(__name__)
 # --- Constants ---
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB per file
 MAX_MARKDOWN_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB per markdown file
+MAX_TOTAL_UPLOAD_SIZE_BYTES = 150 * 1024 * 1024  # 150 MB total per request
 MAX_MERGE_FILES = 50
 PDF_MAGIC_BYTES = b"%PDF-"
 ALLOWED_EXTENSIONS = frozenset({".pdf", ".md"})
@@ -32,7 +33,7 @@ def _sanitize_pdf_sync(file_path: Path) -> None:
         raise ValueError(f"Corrupted or invalid PDF structure: {e}") from e
 
 
-async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
+async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_size: int = 0) -> int:
     """
     Validate an uploaded file is a real PDF and save it to disk with size limits.
 
@@ -42,9 +43,13 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
     Args:
         upload: The uploaded file from FastAPI
         dest: Destination path to save the file
+        current_total_size: Total bytes uploaded so far in this request
+
+    Returns:
+        Updated total bytes uploaded across all files
 
     Raises:
-        HTTPException: If the file is too large, not a PDF, or empty
+        HTTPException: If any size limit is exceeded, not a PDF, or empty
     """
     total_size = 0
     first_chunk = True
@@ -67,11 +72,21 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
                 first_chunk = False
 
             total_size += len(chunk)
+            current_total_size += len(chunk)
+
             if total_size > MAX_FILE_SIZE_BYTES:
                 error = HTTPException(
                     status_code=413,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
+                )
+                break
+
+            if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
+                limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
+                error = HTTPException(
+                    status_code=413,
+                    detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
 
@@ -97,8 +112,12 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path) -> None:
             detail=f"Security scan failed for '{upload.filename}': {e}",
         ) from e
 
+    return current_total_size
 
-async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
+
+async def validate_and_save_markdown(
+    upload: UploadFile, dest: Path, current_total_size: int = 0
+) -> int:
     """
     Validate an uploaded file is a valid markdown text file and save it.
 
@@ -108,9 +127,13 @@ async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
     Args:
         upload: The uploaded file from FastAPI
         dest: Destination path to save the file
+        current_total_size: Total bytes uploaded so far in this request
+
+    Returns:
+        Updated total bytes uploaded across all files
 
     Raises:
-        HTTPException: If the file is too large, not valid UTF-8, or empty
+        HTTPException: If any size limit is exceeded, not valid UTF-8, or empty
     """
     total_size = 0
     chunk_size = 1024 * 1024  # 1 MB chunks
@@ -123,11 +146,21 @@ async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
                 break
 
             total_size += len(chunk)
+            current_total_size += len(chunk)
+
             if total_size > MAX_MARKDOWN_SIZE_BYTES:
                 error = HTTPException(
                     status_code=413,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_MARKDOWN_SIZE_BYTES // (1024 * 1024)} MB",
+                )
+                break
+
+            if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
+                limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
+                error = HTTPException(
+                    status_code=413,
+                    detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
 
@@ -152,6 +185,8 @@ async def validate_and_save_markdown(upload: UploadFile, dest: Path) -> None:
             status_code=400,
             detail=f"File '{upload.filename}' is empty",
         )
+
+    return current_total_size
 
 
 def cleanup_files(*paths: Path) -> None:

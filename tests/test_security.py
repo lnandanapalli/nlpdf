@@ -9,6 +9,7 @@ import pytest
 from backend.security import (
     MAX_FILE_SIZE_BYTES,
     MAX_MARKDOWN_SIZE_BYTES,
+    MAX_TOTAL_UPLOAD_SIZE_BYTES,
     cleanup_files,
     get_client_ip,
     validate_and_save_markdown,
@@ -25,7 +26,9 @@ class TestValidateAndSavePdf:
         dest = tmp_path / "saved.pdf"
         upload = UploadFile(file=io.BytesIO(pdf_bytes), filename="test.pdf")
 
-        await validate_and_save_pdf(upload, dest)
+        returned_size = await validate_and_save_pdf(upload, dest)
+        assert returned_size == len(pdf_bytes)
+        assert returned_size < MAX_TOTAL_UPLOAD_SIZE_BYTES
 
         assert dest.exists()
 
@@ -70,6 +73,20 @@ class TestValidateAndSavePdf:
         assert exc_info.value.status_code == 413
         assert "exceeds maximum size" in exc_info.value.detail
 
+    async def test_total_upload_limit_raises(self, tmp_path):
+        dest = tmp_path / "part2.pdf"
+        # Total limit is 150MB. If we already have 140MB and try to add 20MB:
+        current_total = 140 * 1024 * 1024
+        content = b"%PDF-" + b"x" * (20 * 1024 * 1024)
+        upload = UploadFile(file=io.BytesIO(content), filename="heavy.pdf")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_pdf(upload, dest, current_total_size=current_total)
+
+        assert exc_info.value.status_code == 413
+        assert "total upload size exceeds" in exc_info.value.detail.lower()
+        assert str(MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)) in exc_info.value.detail
+
 
 # ── validate_and_save_markdown ────────────────────────────────────────────────
 
@@ -82,7 +99,9 @@ class TestValidateAndSaveMarkdown:
         content = b"# Hello\n\nSome **bold** text."
         upload = UploadFile(file=io.BytesIO(content), filename="test.md")
 
-        await validate_and_save_markdown(upload, dest)
+        returned_size = await validate_and_save_markdown(upload, dest)
+        assert returned_size == len(content)
+        assert returned_size < MAX_TOTAL_UPLOAD_SIZE_BYTES
 
         assert dest.exists()
         assert dest.read_bytes() == content
@@ -119,6 +138,20 @@ class TestValidateAndSaveMarkdown:
 
         assert exc_info.value.status_code == 413
         assert "exceeds maximum size" in exc_info.value.detail
+
+    async def test_total_upload_limit_raises_markdown(self, tmp_path):
+        dest = tmp_path / "part2.md"
+        # Total limit is 150MB. If we already have 145MB and try to add 10MB:
+        current_total = 145 * 1024 * 1024
+        content = b"x" * (10 * 1024 * 1024)
+        upload = UploadFile(file=io.BytesIO(content), filename="heavy.md")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_and_save_markdown(upload, dest, current_total_size=current_total)
+
+        assert exc_info.value.status_code == 413
+        assert "total upload size exceeds" in exc_info.value.detail.lower()
+        assert str(MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)) in exc_info.value.detail
 
 
 # ── cleanup_files ────────────────────────────────────────────────────────────
