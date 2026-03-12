@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.user import User
+from backend.models.user import OTPPurpose, User
 
 MAX_OTP_ATTEMPTS: int = 5
 MAX_FAILED_LOGIN_ATTEMPTS: int = 5
@@ -37,11 +37,16 @@ async def create_user(
 
 
 async def update_user_otp(
-    db: AsyncSession, user: User, otp_code: str, expires_at: datetime
+    db: AsyncSession,
+    user: User,
+    otp_code: str,
+    expires_at: datetime,
+    purpose: OTPPurpose = OTPPurpose.SIGNUP,
 ) -> None:
     """Update the OTP code and expiration for a user, resetting attempt counter."""
     user.otp_code = otp_code
     user.otp_expires_at = expires_at
+    user.otp_purpose = purpose
     user.otp_attempts = 0
 
 
@@ -67,6 +72,7 @@ async def increment_otp_attempts(db: AsyncSession, user: User) -> int:
     if new_count >= MAX_OTP_ATTEMPTS:
         user.otp_code = None
         user.otp_expires_at = None
+        user.otp_purpose = None
     return new_count
 
 
@@ -75,6 +81,7 @@ async def mark_user_verified(db: AsyncSession, user: User) -> None:
     user.is_verified = True
     user.otp_code = None
     user.otp_expires_at = None
+    user.otp_purpose = None
     user.otp_attempts = 0
 
 

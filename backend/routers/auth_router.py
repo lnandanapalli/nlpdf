@@ -52,7 +52,7 @@ from backend.crud.user_crud import (
     update_user_password,
 )
 from backend.database import get_db
-from backend.models.user import User
+from backend.models.user import OTPPurpose, User
 from backend.rate_limit import limiter
 from backend.schemas.auth_schema import (
     ChangePasswordRequest,
@@ -262,6 +262,13 @@ async def verify_otp(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code",
+        )
+
+    if user.otp_purpose != OTPPurpose.SIGNUP:
+        hmac.compare_digest("dummy", body.otp_code)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="OTP is intended for a different operation",
         )
 
     if (user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:
@@ -588,7 +595,7 @@ async def request_account_deletion(
 
     otp_code = generate_otp()
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
-    await update_user_otp(db, current_user, otp_code, expires_at)
+    await update_user_otp(db, current_user, otp_code, expires_at, purpose=OTPPurpose.DELETE_ACCOUNT)
     background_tasks.add_task(send_account_deletion_otp_email, str(current_user.email), otp_code)
     return SuccessResponse(message="Confirmation code sent to your email")
 
@@ -607,6 +614,12 @@ async def confirm_account_deletion(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active confirmation code. Please request account deletion first.",
+        )
+
+    if current_user.otp_purpose != OTPPurpose.DELETE_ACCOUNT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation code is intended for a different operation.",
         )
 
     if (current_user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:

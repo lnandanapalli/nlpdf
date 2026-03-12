@@ -1,9 +1,11 @@
 """User model."""
 
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.base import Base
@@ -11,6 +13,13 @@ from backend.base import Base
 if TYPE_CHECKING:
     from backend.models.document import Document
     from backend.models.session import Session
+
+
+class OTPPurpose(StrEnum):
+    """Enumeration of valid contexts for an OTP code to prevent cross-flow reuse."""
+
+    SIGNUP = "signup"
+    DELETE_ACCOUNT = "delete"
 
 
 class User(Base):
@@ -28,6 +37,9 @@ class User(Base):
     is_verified: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     otp_code: Mapped[str | None] = mapped_column(String(6), nullable=True)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    otp_purpose: Mapped[OTPPurpose | None] = mapped_column(
+        SQLEnum(OTPPurpose, native_enum=False, length=20), nullable=True
+    )
     otp_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Login security
