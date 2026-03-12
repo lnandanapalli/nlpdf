@@ -153,7 +153,9 @@ async def security_headers_middleware(
         "connect-src 'self'"
     )
     if settings.APP_ENV != "development":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
     return response
 
 

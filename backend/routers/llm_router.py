@@ -1,6 +1,7 @@
 """LLM-powered natural language PDF processing endpoint."""
 
 from pathlib import Path
+import re
 from typing import Annotated, Any
 import uuid
 
@@ -140,6 +141,12 @@ async def process_with_llm(
         input_paths.append(in_path)
         temps.append(in_path)
 
+    def _sanitize_filename(name: str | None) -> str:
+        if not name:
+            return "document"
+        sanitized = re.sub(r"[^a-zA-Z0-9_\-]", "", Path(name).stem)
+        return sanitized or "document"
+
     try:
         # 1. Validate and save uploaded files
         for file, in_path in zip(files, input_paths, strict=True):
@@ -165,7 +172,7 @@ async def process_with_llm(
         )
 
         # 4. Execute the operation chain
-        original_filenames = [Path(f.filename or "document").stem for f in files]
+        original_filenames = [_sanitize_filename(f.filename) for f in files]
         original_name = original_filenames[0] if len(files) == 1 else "documents"
 
         result_path = await run_in_threadpool(
