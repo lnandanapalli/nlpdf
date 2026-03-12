@@ -3,10 +3,12 @@
 from pathlib import Path
 import shutil
 import tempfile
+from typing import Any
 
 import anyio
 from anyio import to_thread
 from fastapi import HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 import pikepdf
 import structlog
 from user_agents import parse as parse_ua
@@ -199,6 +201,47 @@ def cleanup_files(*paths: Path) -> None:
                 path.unlink(missing_ok=True)
         except OSError:
             logger.warning("Failed to clean up temp path: %s", path)
+
+
+class CleanupFileResponse(FileResponse):
+    """A FileResponse that cleans up specified files/directories after the response is fully sent.
+
+    This prevents the L5 race condition where files could be deleted before delivery completes.
+    """
+
+    def __init__(  # noqa: PLR0913
+        self,
+        path: str | Path,
+        cleanup_paths: list[Path],
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+        media_type: str | None = None,
+        background: None = None,
+        filename: str | None = None,
+        stat_result: None = None,
+        method: str | None = None,
+        content_disposition_type: str = "attachment",
+    ) -> None:
+        """Initialize with a list of paths to delete after completion."""
+        self.cleanup_paths = cleanup_paths
+        super().__init__(
+            path=path,
+            status_code=status_code,
+            headers=headers,
+            media_type=media_type,
+            background=background,
+            filename=filename,
+            stat_result=stat_result,
+            method=method,
+            content_disposition_type=content_disposition_type,
+        )
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        """ASGI entry point for the response."""
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            cleanup_files(*self.cleanup_paths)
 
 
 def get_client_ip(request: Request) -> str:

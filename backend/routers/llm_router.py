@@ -6,10 +6,8 @@ from typing import Annotated, Any
 import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 import structlog
 
@@ -21,6 +19,7 @@ from backend.security import (
     ALLOWED_EXTENSIONS,
     MAX_MERGE_FILES,
     UPLOAD_DIR,
+    CleanupFileResponse,
     cleanup_files,
     validate_and_save_markdown,
     validate_and_save_pdf,
@@ -123,7 +122,7 @@ async def process_with_llm(
             )
         ),
     ],
-) -> FileResponse:
+) -> CleanupFileResponse:
     """Process PDF(s) or markdown file(s) using natural language instructions.
 
     Supports chained operations (e.g. "merge then compress").
@@ -209,11 +208,11 @@ async def process_with_llm(
             page_count=total_pages,
         )
 
-        return FileResponse(
+        return CleanupFileResponse(
             path=result_path,
             media_type=media_type,
             filename=filename,
-            background=BackgroundTask(cleanup_files, *temps),
+            cleanup_paths=temps,
         )
 
     except HTTPException:
