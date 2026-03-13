@@ -14,6 +14,8 @@ CSRF_EXEMPT_PATHS = {
     "/auth/verify_otp",
     "/auth/resend_otp",
     "/auth/refresh",
+    "/auth/forgot-password",
+    "/auth/reset-password",
 }
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}

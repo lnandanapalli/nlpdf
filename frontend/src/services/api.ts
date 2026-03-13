@@ -174,6 +174,18 @@ export async function resendOtp(email: string): Promise<void> {
   await api.post('/auth/resend_otp', { email });
 }
 
+export async function forgotPassword(email: string, cfToken: string): Promise<void> {
+  await api.post('/auth/forgot-password', { email, cf_token: cfToken });
+}
+
+export async function resetPassword(
+  email: string, otpCode: string, newPassword: string, cfToken: string,
+): Promise<void> {
+  await api.post('/auth/reset-password', {
+    email, otp_code: otpCode, new_password: newPassword, cf_token: cfToken,
+  });
+}
+
 // --- Error Handling ---
 
 export function extractErrorMessage(err: unknown, fallback: string): string {

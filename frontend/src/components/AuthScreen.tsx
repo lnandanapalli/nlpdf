@@ -1,14 +1,15 @@
-import { useRef, useState, type SubmitEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import {
   Box, Container, Typography, TextField, Button,
   Alert, Paper, InputAdornment, IconButton, Link, useTheme,
   Checkbox, FormControlLabel,
 } from '@mui/material';
-import { Mail, Lock, Eye, EyeOff, KeyRound, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   login as apiLogin, signup as apiSignup, verifyOtp, resendOtp, extractErrorMessage,
+  forgotPassword, resetPassword,
 } from '../services/api';
 import { config } from '../config';
 
@@ -34,6 +35,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [showResetForm, setShowResetForm] = useState(false);
   const turnstileRef = useRef<TurnstileInstance>(null);
   const theme = useTheme();
   const iconColor = theme.palette.text.secondary;
@@ -42,7 +45,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError(extractErrorMessage(err, defaultMessage));
   };
 
-  const handleSubmit = async (e: SubmitEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -82,12 +85,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     } catch (err) {
       handleError(err, 'An unexpected error occurred. Please try again.');
+      setCfToken('');
+      turnstileRef.current?.reset();
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyOTP = async (e: SubmitEvent) => {
+  const handleVerifyOTP = async (e: FormEvent) => {
     e.preventDefault();
     if (!otpCode) { setError('Please enter the verification code'); return; }
     if (!cfToken) { setError('Please complete the CAPTCHA'); return; }
@@ -100,6 +105,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       onLogin();
     } catch (err) {
       handleError(err, 'Verification failed. Please check the code and try again.');
+      setCfToken('');
+      turnstileRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -121,6 +128,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const switchMode = () => {
     setIsLogin(!isLogin);
+    setIsForgotPassword(false);
+    setShowResetForm(false);
     setFirstName('');
     setLastName('');
     setError('');
@@ -132,6 +141,61 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setCfToken('');
     turnstileRef.current?.reset();
   };
+
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email) { setError('Please enter your email'); return; }
+    if (!cfToken) { setError('Please complete the CAPTCHA'); return; }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await forgotPassword(email, cfToken);
+      setSuccess('If that email is valid, a reset code was sent.');
+      setShowResetForm(true);
+      setCfToken('');
+      turnstileRef.current?.reset();
+    } catch (err) {
+      handleError(err, 'Failed to initiate password reset.');
+      setCfToken('');
+      turnstileRef.current?.reset();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || !password || !confirmPassword) { setError('Please fill in all fields'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (!cfToken) { setError('Please complete the CAPTCHA'); return; }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await resetPassword(email, otpCode, password, cfToken);
+      setSuccess('Password reset successfully. You can now log in.');
+      setIsForgotPassword(false);
+      setShowResetForm(false);
+      setIsLogin(true);
+      setPassword('');
+      setConfirmPassword('');
+      setOtpCode('');
+      setCfToken('');
+      turnstileRef.current?.reset();
+    } catch (err) {
+      handleError(err, 'Failed to reset password. Please check the code.');
+      setCfToken('');
+      turnstileRef.current?.reset();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Determine the current "step" to force Turnstile reset on mode change
+  const currentStep = showOTP ? 'otp' : isForgotPassword ? (showResetForm ? 'reset' : 'forgot') : (isLogin ? 'login' : 'signup');
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100dvh', alignItems: 'center', justifyContent: 'center' }}>
@@ -145,211 +209,255 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           </Box>
 
           <Typography variant="h6" align="center" sx={{ mb: 3, fontWeight: 500 }}>
-            {showOTP ? 'Verify your email' : (isLogin ? 'Welcome back' : 'Create an account')}
+            {showOTP ? 'Verify your email' :
+             isForgotPassword ? (showResetForm ? 'Reset password' : 'Forgot password') :
+             (isLogin ? 'Welcome back' : 'Create an account')}
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
           {success && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{success}</Alert>}
 
-          {!showOTP ? (
-            <>
-              <form onSubmit={handleSubmit}>
-                {!isLogin && (
-                  <>
-                    <TextField
-                      fullWidth label="First Name" value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      sx={{ mb: 2 }}
-                      slotProps={{
-                        input: {
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <User size={20} color={iconColor} />
-                            </InputAdornment>
-                          ),
-                        },
-                      }}
-                    />
-                    <TextField
-                      fullWidth label="Last Name" value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      sx={{ mb: 2 }}
-                      slotProps={{
-                        input: {
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <User size={20} color={iconColor} />
-                            </InputAdornment>
-                          ),
-                        },
-                      }}
-                    />
-                  </>
-                )}
-
-                <TextField
-                  fullWidth label="Email" type="email" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  sx={{ mb: 2 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Mail size={20} color={iconColor} />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  fullWidth label="Password" type={showPassword ? 'text' : 'password'}
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  sx={{ mb: !isLogin ? 2 : 3 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock size={20} color={iconColor} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                {!isLogin && (
+          <Box sx={{ mb: 2 }}>
+            {showOTP ? (
+              /* --- PART 1: SIGNUP OTP VERIFICATION --- */
+              <>
+                <form onSubmit={handleVerifyOTP}>
                   <TextField
-                    fullWidth label="Confirm Password"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                    fullWidth label="6-digit Verification Code" type="text"
+                    value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
                     sx={{ mb: 3 }}
                     slotProps={{
                       input: {
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Lock size={20} color={iconColor} />
+                            <KeyRound size={20} color={iconColor} />
                           </InputAdornment>
                         ),
+                      },
+                    }}
+                  />
+                  <Button
+                    fullWidth type="submit" variant="contained" color="primary" size="large"
+                    disabled={loading} sx={{ py: 1.5, mb: 2 }}
+                  >
+                    {loading ? 'Verifying…' : 'Verify Email'}
+                  </Button>
+                </form>
+
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Didn't receive the code?{' '}
+                  <Link component="button" variant="body2" onClick={handleResendOTP} disabled={loading} sx={{ fontWeight: 600 }}>
+                    Resend
+                  </Link>
+                </Typography>
+
+                <Box sx={{ mt: 1, textAlign: 'center' }}>
+                  <Link
+                    component="button" type="button" variant="body2" color="text.secondary"
+                    onClick={() => { setShowOTP(false); setIsLogin(true); setError(''); setSuccess(''); }}
+                  >
+                    Back to Login
+                  </Link>
+                </Box>
+              </>
+            ) : isForgotPassword ? (
+              /* --- PART 2: FORGOT PASSWORD FLOW --- */
+              <>
+                {!showResetForm ? (
+                  <form onSubmit={handleForgotPassword}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
+                      Enter your email address to receive a verification code.
+                    </Typography>
+                    <TextField
+                      fullWidth label="Email" type="email" value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      sx={{ mb: 3 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Mail size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <Button
+                      fullWidth type="submit" variant="contained" color="primary" size="large"
+                      disabled={loading} sx={{ py: 1.5, mb: 2 }}
+                    >
+                      {loading ? 'Sending code…' : 'Send Reset Code'}
+                    </Button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleResetPassword}>
+                    <TextField
+                      fullWidth label="Verification Code" type="text"
+                      value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
+                      sx={{ mb: 2 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <KeyRound size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <TextField
+                      fullWidth label="New Password" type={showPassword ? 'text' : 'password'}
+                      value={password} onChange={(e) => setPassword(e.target.value)}
+                      sx={{ mb: 2 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Lock size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <TextField
+                      fullWidth label="Confirm" type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                      sx={{ mb: 3 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Lock size={20} color={iconColor} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small">
+                                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <Button
+                      fullWidth type="submit" variant="contained" color="primary" size="large"
+                      disabled={loading} sx={{ py: 1.5, mb: 2 }}
+                    >
+                      {loading ? 'Resetting…' : 'Reset Password'}
+                    </Button>
+                  </form>
+                )}
+                <Box sx={{ mt: 1, textAlign: 'center' }}>
+                  <Link
+                    component="button" variant="body2" color="text.secondary"
+                    onClick={() => { setIsForgotPassword(false); setShowResetForm(false); setError(''); setSuccess(''); turnstileRef.current?.reset(); }}
+                  >
+                    Back to Login
+                  </Link>
+                </Box>
+              </>
+            ) : (
+              /* --- PART 3: LOGIN / SIGNUP --- */
+              <>
+                <form onSubmit={handleSubmit}>
+                  {!isLogin && (
+                    <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                      <TextField fullWidth label="First" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                      <TextField fullWidth label="Last" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                    </Box>
+                  )}
+                  <TextField
+                    fullWidth label="Email" type="email" value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    sx={{ mb: 2 }}
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start"><Mail size={20} color={iconColor} /></InputAdornment>,
+                      },
+                    }}
+                  />
+                  <TextField
+                    fullWidth label="Password" type={showPassword ? 'text' : 'password'}
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    sx={{ mb: !isLogin ? 2 : 1 }}
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start"><Lock size={20} color={iconColor} /></InputAdornment>,
                         endAdornment: (
                           <InputAdornment position="end">
-                            <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" size="small" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}>
-                              {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </IconButton>
                           </InputAdornment>
                         ),
                       },
                     }}
                   />
-                )}
 
-                {!isLogin && (
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={agreedToTerms}
-                        onChange={(e) => setAgreedToTerms(e.target.checked)}
-                        size="small"
+                  {isLogin && (
+                    <Box sx={{ textAlign: 'right', mb: 2 }}>
+                      <Link
+                        component="button" type="button" variant="body2"
+                        onClick={() => { setIsForgotPassword(true); setError(''); setSuccess(''); turnstileRef.current?.reset(); }}
+                      >
+                        Forgot password?
+                      </Link>
+                    </Box>
+                  )}
+
+                  {!isLogin && (
+                    <>
+                      <TextField
+                        fullWidth label="Confirm Password" type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                        sx={{ mb: 2 }}
                       />
-                    }
-                    label={
-                      <Typography variant="body2" color="text.secondary">
-                        I agree to the{' '}
-                        <Link component={RouterLink} to="/terms" target="_blank" variant="body2">Terms of Service</Link>
-                        {' '}and{' '}
-                        <Link component={RouterLink} to="/privacy" target="_blank" variant="body2">Privacy Policy</Link>
-                      </Typography>
-                    }
-                    sx={{ mb: 1, alignItems: 'flex-start', '& .MuiCheckbox-root': { pt: 0.5 } }}
-                  />
-                )}
+                      <FormControlLabel
+                        control={<Checkbox checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} size="small" />}
+                        label={<Typography variant="body2">I agree to the <Link component={RouterLink} to="/terms" target="_blank">Terms</Link></Typography>}
+                        sx={{ mb: 2, alignItems: 'flex-start' }}
+                      />
+                    </>
+                  )}
 
-                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                  <Turnstile
-                    ref={turnstileRef}
-                    siteKey={TURNSTILE_SITE_KEY}
-                    onSuccess={(token) => setCfToken(token)}
-                    onError={() => setCfToken('')}
-                    onExpire={() => setCfToken('')}
-                    options={{ theme: 'dark' }}
-                  />
-                </Box>
+                  <Button
+                    fullWidth type="submit" variant="contained" color="primary" size="large"
+                    disabled={loading} sx={{ py: 1.5, mb: 2 }}
+                  >
+                    {loading ? 'Processing…' : (isLogin ? 'Sign In' : 'Sign Up')}
+                  </Button>
+                </form>
 
-                <Button
-                  fullWidth type="submit" variant="contained" color="primary" size="large"
-                  disabled={loading} sx={{ py: 1.5, mb: 2 }}
-                >
-                  {loading ? 'Processing…' : (isLogin ? 'Sign In' : 'Sign Up')}
-                </Button>
-              </form>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  {isLogin ? "Don't have an account? " : 'Already have an account? '}
+                  <Link component="button" type="button" variant="body2" onClick={switchMode} sx={{ fontWeight: 600 }}>
+                    {isLogin ? 'Sign up' : 'Log in'}
+                  </Link>
+                </Typography>
+              </>
+            )}
+          </Box>
 
-              <Typography variant="body2" color="text.secondary" align="center">
-                {isLogin ? "Don't have an account? " : 'Already have an account? '}
-                <Link component="button" variant="body2" onClick={switchMode} sx={{ fontWeight: 600 }}>
-                  {isLogin ? 'Sign up' : 'Log in'}
-                </Link>
-              </Typography>
-            </>
-          ) : (
-            <>
-              <form onSubmit={handleVerifyOTP}>
-                <TextField
-                  fullWidth label="6-digit Verification Code" type="text"
-                  value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
-                  sx={{ mb: 3 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <KeyRound size={20} color={iconColor} />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                  <Turnstile
-                    ref={turnstileRef}
-                    siteKey={TURNSTILE_SITE_KEY}
-                    onSuccess={(token) => setCfToken(token)}
-                    onError={() => setCfToken('')}
-                    onExpire={() => setCfToken('')}
-                    options={{ theme: 'dark' }}
-                  />
-                </Box>
-
-                <Button
-                  fullWidth type="submit" variant="contained" color="primary" size="large"
-                  disabled={loading} sx={{ py: 1.5, mb: 2 }}
-                >
-                  {loading ? 'Verifying…' : 'Verify Email'}
-                </Button>
-              </form>
-
-              <Typography variant="body2" color="text.secondary" align="center">
-                Didn't receive the code?{' '}
-                <Link component="button" variant="body2" onClick={handleResendOTP} disabled={loading} sx={{ fontWeight: 600 }}>
-                  Resend
-                </Link>
-              </Typography>
-
-              <Box sx={{ mt: 1, textAlign: 'center' }}>
-                <Link
-                  component="button" variant="body2" color="text.secondary"
-                  onClick={() => { setShowOTP(false); setIsLogin(true); setError(''); setSuccess(''); }}
-                >
-                  Back to Login
-                </Link>
-              </Box>
-            </>
-          )}
+          {/* SINGLE CONSOLIDATED TURNSTILE COMPONENT */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+            <Turnstile
+              key={currentStep} // FORCE RESET ON MODE CHANGE
+              ref={turnstileRef}
+              siteKey={TURNSTILE_SITE_KEY}
+              onSuccess={(token) => setCfToken(token)}
+              onError={() => setCfToken('')}
+              onExpire={() => setCfToken('')}
+              options={{ theme: 'dark' }}
+            />
+          </Box>
         </Paper>
       </Container>
     </Box>

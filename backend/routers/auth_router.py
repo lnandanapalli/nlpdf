@@ -58,8 +58,10 @@ from backend.schemas.auth_schema import (
     ChangePasswordRequest,
     DeleteAccountConfirmRequest,
     DeleteAccountRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     ResendOTPRequest,
+    ResetPasswordRequest,
     SessionResponse,
     SignupRequest,
     SuccessResponse,
@@ -71,6 +73,7 @@ from backend.security import get_client_ip, parse_device_info
 from backend.services.email_service import (
     send_account_deletion_otp_email,
     send_otp_email,
+    send_password_reset_otp_email,
 )
 from backend.services.turnstile_service import verify_turnstile
 
@@ -652,3 +655,113 @@ async def confirm_account_deletion(
     clear_auth_cookies(response)
     logger.info("account_deleted", user_id=user_id)
     return SuccessResponse(message="Account deleted successfully")
+
+
+# ---------------------------------------------------------------------------
+# Password reset (Forgot password flow)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/10minutes")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: DB,
+) -> SuccessResponse:
+    """Initiate a password reset flow by sending an OTP to the user's email."""
+    if not await verify_turnstile(body.cf_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
+        )
+
+    user = await get_user_by_email(db, body.email)
+
+    if user is None:
+        # Prevent email enumeration: return success even if email doesn't exist
+        return SuccessResponse(
+            message="If an account with that email exists, a reset code has been sent."
+        )
+
+    if not user.is_verified:
+        return SuccessResponse(
+            message="If an account with that email exists, a reset code has been sent."
+        )
+
+    otp_code = generate_otp()
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
+    await update_user_otp(db, user, otp_code, expires_at, purpose=OTPPurpose.PASSWORD_RESET)
+    background_tasks.add_task(send_password_reset_otp_email, str(user.email), otp_code)
+
+    return SuccessResponse(
+        message="If an account with that email exists, a reset code has been sent."
+    )
+
+
+@router.post("/reset-password")
+@limiter.limit("5/10minutes")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: DB,
+) -> SuccessResponse:
+    """Reset the user's password using an OTP code."""
+    if not await verify_turnstile(body.cf_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
+        )
+
+    user = await get_user_by_email(db, body.email)
+
+    if user is None:
+        hmac.compare_digest("dummy", body.otp_code)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset code.",
+        )
+
+    if user.otp_code is None or user.otp_expires_at is None:
+        hmac.compare_digest("dummy", body.otp_code)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset code.",
+        )
+
+    if user.otp_purpose != OTPPurpose.PASSWORD_RESET:
+        hmac.compare_digest("dummy", body.otp_code)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="OTP is intended for a different operation",
+        )
+
+    if (user.otp_attempts or 0) >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Please request a new code.",
+        )
+
+    _check_otp_expiry(user.otp_expires_at)
+
+    # C4: constant-time comparison
+    if not hmac.compare_digest(str(user.otp_code), body.otp_code):
+        new_attempts = await increment_otp_attempts(db, user)
+        if new_attempts >= MAX_OTP_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed attempts. Please request a new code.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset code.",
+        )
+
+    # SECURE: Revoke all existing sessions and bump token version on password reset
+    await update_user_password(db, user, hash_password(body.new_password))
+    await delete_all_user_sessions(db, user.id)
+    await bump_token_version(db, user)
+
+    logger.info("password_reset_successful", user_id=user.id)
+    return SuccessResponse(message="Password reset successfully. You can now log in.")

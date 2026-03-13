@@ -20,6 +20,7 @@ class OTPPurpose(StrEnum):
 
     SIGNUP = "signup"
     DELETE_ACCOUNT = "delete"
+    PASSWORD_RESET = "password_reset"  # noqa: S105 # nosec B105 # pragma: allowlist secret
 
 
 class User(Base):

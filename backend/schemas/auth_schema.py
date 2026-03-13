@@ -81,6 +81,22 @@ class DeleteAccountConfirmRequest(BaseModel):
     otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request to initiate password reset."""
+
+    email: EmailStr
+    cf_token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request to complete password reset."""
+
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    new_password: str = Field(..., min_length=8, max_length=128)
+    cf_token: str
+
+
 class SessionResponse(BaseModel):
     """A single active login session — shown in the 'Active Sessions' settings page."""
 

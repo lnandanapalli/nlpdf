@@ -61,3 +61,29 @@ def send_account_deletion_otp_email(to_email: str, otp_code: str) -> None:
         resend.Emails.send(params)
     except Exception:
         logger.exception("Failed to send deletion OTP email", to_email=mask_email(to_email))
+
+
+def send_password_reset_otp_email(to_email: str, otp_code: str) -> None:
+    """Send an OTP code for password reset confirmation."""
+    html_content = f"""
+    <h2>Password Reset Request</h2>
+    <p>You have requested to reset your NLPDF password.</p>
+    <p>Your verification code is: <strong>{otp_code}</strong></p>
+    <p>This code will expire in 10 minutes.</p>
+    <p>If you did not request this, please ignore this email.</p>
+    """
+
+    params = cast(
+        "resend.Emails.SendParams",
+        {
+            "from": settings.EMAIL_FROM,
+            "to": to_email,
+            "subject": "NLPDF Password Reset Code",
+            "html": html_content,
+        },
+    )
+
+    try:
+        resend.Emails.send(params)
+    except Exception:
+        logger.exception("Failed to send password reset OTP email", to_email=mask_email(to_email))
