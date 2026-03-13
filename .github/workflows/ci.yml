@@ -43,9 +43,11 @@ jobs:
         run: |
           docker compose up -d sqlserver
           # Wait for SQL Server
+          echo "Waiting for SQL Server..."
           until docker exec nlpdf_sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'NlpdfPass123!' -Q 'SELECT 1' -No; do
             sleep 5
           done
+          poetry run alembic upgrade head
           poetry run pytest tests/ -v --cov=backend --cov-report=term-missing
         env:
           APP_ENV: development
@@ -147,7 +149,7 @@ jobs:
           
           poetry run alembic upgrade head
           nohup poetry run uvicorn backend.main:app --port 8000 &
-          npx wait-on http://localhost:8000/health --timeout 60000
+          npx wait-on http-get://localhost:8000/health --timeout 60000
 
       - name: Run Playwright Tests
         run: cd frontend && npm run test:e2e
