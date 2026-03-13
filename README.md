@@ -14,9 +14,9 @@ Upload PDFs and describe what you want in plain English. The system uses Llama 3
 ## Features
 
 - **Natural Language Parsing** — Llama 3.1 via HuggingFace Inference API, with automatic OpenAI fallback on failure
-- **PDF Operations** — Compress, split, merge, rotate, markdown-to-PDF (chainable)
+- **PDF Operations** — Compress, split, merge, rotate, markdown-to-PDF (chainable and deterministic)
 - **Auth** — httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
-- **Security** — File validation, CAPTCHA, rate limiting, Argon2id hashing
+- **Security & Robustness** — File validation, CAPTCHA, rate limiting, Argon2id hashing, OOM protection for massive images, and safe Unicode chunked decoding for large files
 
 ## Tech Stack
 
@@ -104,11 +104,16 @@ poetry run pytest tests/ -v
 
 ## Code Quality
 
-Pre-commit hooks run `ruff`, `black`, `ty`, and `bandit` on every commit.
+Pre-commit hooks run `ruff`, `black`, `ty`, `bandit`, `pip-audit`, and `detect-secrets` on every commit.
 
 ```bash
 poetry run pre-commit install
 ```
+ 
+Secrets are managed via `.secrets.baseline`. If a commit is blocked by `detect-secrets`:
+1.  Verify the "secret" is safe (e.g. a mock string or migration ID).
+2.  Update the baseline: `poetry run detect-secrets scan > .secrets.baseline`.
+3.  Stage the updated `.secrets.baseline` and try again.
 
 ## Environment Variables
 
