@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     DB_NAME: str = "nlpdf_db"
     DB_USER: str = "sa"
     DB_PASSWORD: str
-    DB_DRIVER: str = "ODBC Driver 18 for SQL Server"
+    DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
 
     # JWT Authentication
     JWT_SECRET_KEY: str

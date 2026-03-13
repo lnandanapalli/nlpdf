@@ -23,7 +23,7 @@ _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
 if settings.DATABASE_URL_OVERRIDE:
     _sync_url = str(settings.DATABASE_URL_OVERRIDE).replace("+aioodbc", "+pyodbc").replace("+aiosqlite", "")
 else:
-    _sync_url = str(URL.create(
+    _sync_url = URL.create(
         drivername="mssql+pyodbc",
         username=settings.DB_USER,
         password=settings.DB_PASSWORD,
@@ -36,10 +36,10 @@ else:
             "TrustServerCertificate": _trust_cert,
             "Connection Timeout": "30",
         },
-    ))
+    )
 
 # ConfigParser (used by Alembic) interprets '%' as interpolation. Must escape it.
-config.set_main_option("sqlalchemy.url", _sync_url.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", str(_sync_url).replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
