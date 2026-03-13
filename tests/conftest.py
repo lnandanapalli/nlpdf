@@ -35,6 +35,19 @@ def tmp_output(tmp_path: Path) -> Path:
     return tmp_path / "output.pdf"
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def setup_db():
+    """Build the database schema before running tests."""
+    from backend.base import Base
+    from backend.database import engine
+
+    # Only auto-create tables if we are using an in-memory SQLite DB
+    # or a dedicated test DB path.
+    if "sqlite" in str(engine.url):
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+
 @pytest.fixture
 def pdf_bytes(small_pdf: Path) -> bytes:
     """Return raw bytes of a valid single-page PDF."""

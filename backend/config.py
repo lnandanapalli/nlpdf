@@ -36,12 +36,13 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT_SECONDS: int = 120
 
     # Database
+    DATABASE_URL_OVERRIDE: str | None = None
     DB_HOST: str = "localhost"
     DB_PORT: int = 1433
     DB_NAME: str = "nlpdf_db"
     DB_USER: str = "sa"
     DB_PASSWORD: str
-    DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
+    DB_DRIVER: str = "ODBC Driver 18 for SQL Server"
 
     # JWT Authentication
     JWT_SECRET_KEY: str

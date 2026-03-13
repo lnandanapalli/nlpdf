@@ -12,22 +12,24 @@ from backend.config import settings
 
 logger = structlog.get_logger(__name__)
 
-_trust_cert = "yes" if settings.APP_ENV == "development" else "no"
-
-database_url = URL.create(
-    drivername="mssql+aioodbc",
-    username=settings.DB_USER,
-    password=settings.DB_PASSWORD,
-    host=settings.DB_HOST,
-    port=settings.DB_PORT,
-    database=settings.DB_NAME,
-    query={
-        "driver": settings.DB_DRIVER,
-        "Encrypt": "yes",
-        "TrustServerCertificate": _trust_cert,
-        "Connection Timeout": "30",
-    },
-)
+if settings.DATABASE_URL_OVERRIDE:
+    database_url: str | URL = settings.DATABASE_URL_OVERRIDE
+else:
+    _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
+    database_url = URL.create(
+        drivername="mssql+aioodbc",
+        username=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        database=settings.DB_NAME,
+        query={
+            "driver": settings.DB_DRIVER,
+            "Encrypt": "yes",
+            "TrustServerCertificate": _trust_cert,
+            "Connection Timeout": "30",
+        },
+    )
 
 engine = create_async_engine(
     database_url,
