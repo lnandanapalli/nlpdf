@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: 'npm'
@@ -114,7 +114,7 @@ jobs:
         run: docker compose up -d sqlserver
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: 'npm'
