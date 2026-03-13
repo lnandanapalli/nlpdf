@@ -115,7 +115,7 @@ jobs:
           echo "DB_USER=sa" >> .env
           echo "DB_PASSWORD=NlpdfPass123!" >> .env # pragma: allowlist secret
           echo "DB_NAME=master" >> .env
-          echo "DB_DRIVER={ODBC Driver 18 for SQL Server}" >> .env
+          echo "DB_DRIVER=ODBC Driver 18 for SQL Server" >> .env
           echo "HUGGINGFACE_API_TOKEN=mock" >> .env
           echo "RESEND_API_KEY=mock" >> .env
           echo "TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
