@@ -16,6 +16,15 @@ if settings.DATABASE_URL_OVERRIDE:
     database_url: str | URL = settings.DATABASE_URL_OVERRIDE
 else:
     _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
+    _query = {
+        "driver": settings.DB_DRIVER,
+        "TrustServerCertificate": _trust_cert,
+        "Connection Timeout": "30",
+    }
+    # ODBC 18 requires Encrypt=yes by default, but ODBC 17 can be picky
+    if "18" in settings.DB_DRIVER:
+        _query["Encrypt"] = "yes"
+
     database_url = URL.create(
         drivername="mssql+aioodbc",
         username=settings.DB_USER,
@@ -23,12 +32,7 @@ else:
         host=settings.DB_HOST,
         port=settings.DB_PORT,
         database=settings.DB_NAME,
-        query={
-            "driver": settings.DB_DRIVER,
-            "Encrypt": "yes",
-            "TrustServerCertificate": _trust_cert,
-            "Connection Timeout": "30",
-        },
+        query=_query,
     )
 
 engine = create_async_engine(

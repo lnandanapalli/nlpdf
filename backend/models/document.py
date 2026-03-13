@@ -20,7 +20,9 @@ class Document(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
     # Ownership
-    owner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    owner_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
 
     # Metadata
     original_filename: Mapped[str] = mapped_column(String, nullable=False)
