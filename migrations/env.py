@@ -16,25 +16,30 @@ import backend.models  # noqa: F401
 # access to the values within the .ini file in use.
 config = context.config
 
-# Alembic requires a synchronous connection URL.
-# Build the sync URL using mssql+pyodbc:// from the same DB settings.
 _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
 
-_sync_url = URL.create(
-    drivername="mssql+pyodbc",
-    username=settings.DB_USER,
-    password=settings.DB_PASSWORD,
-    host=settings.DB_HOST,
-    port=settings.DB_PORT,
-    database=settings.DB_NAME,
-    query={
-        "driver": settings.DB_DRIVER,
-        "Encrypt": "yes",
-        "TrustServerCertificate": _trust_cert,
-        "Connection Timeout": "30",
-    },
-)
-config.set_main_option("sqlalchemy.url", str(_sync_url))
+# Build the sync URL. Prioritize the override (converting to sync if needed),
+# then fall back to the MSSQL constructor.
+if settings.DATABASE_URL_OVERRIDE:
+    _sync_url = str(settings.DATABASE_URL_OVERRIDE).replace("+aioodbc", "+pyodbc").replace("+aiosqlite", "")
+else:
+    _sync_url = str(URL.create(
+        drivername="mssql+pyodbc",
+        username=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        database=settings.DB_NAME,
+        query={
+            "driver": settings.DB_DRIVER,
+            "Encrypt": "yes",
+            "TrustServerCertificate": _trust_cert,
+            "Connection Timeout": "30",
+        },
+    ))
+
+# ConfigParser (used by Alembic) interprets '%' as interpolation. Must escape it.
+config.set_main_option("sqlalchemy.url", _sync_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
