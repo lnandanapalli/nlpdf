@@ -37,6 +37,13 @@ jobs:
         run: poetry run pre-commit run --all-files
       - name: Run Backend Tests
         run: poetry run pytest tests/ -v --cov=backend --cov-report=term-missing
+        env:
+          APP_ENV: development
+          HUGGINGFACE_API_TOKEN: mock # pragma: allowlist secret
+          DB_PASSWORD: mock # pragma: allowlist secret
+          JWT_SECRET_KEY: ci-test-secret-key-at-least-32-chars-long # pragma: allowlist secret
+          RESEND_API_KEY: mock # pragma: allowlist secret
+          CLOUDFLARE_TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA # pragma: allowlist secret
 
   frontend:
     name: Frontend (Lint & Build)
@@ -111,6 +118,7 @@ jobs:
           echo "HUGGINGFACE_API_TOKEN=mock" >> .env
           echo "RESEND_API_KEY=mock" >> .env
           echo "TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
+          echo "CLOUDFLARE_TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
           
           # Wait for SQL Server to be healthy
           echo "Waiting for SQL Server..."
