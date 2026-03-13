@@ -23,6 +23,15 @@ _trust_cert = "yes" if settings.APP_ENV == "development" else "no"
 if settings.DATABASE_URL_OVERRIDE:
     _sync_url = str(settings.DATABASE_URL_OVERRIDE).replace("+aioodbc", "+pyodbc").replace("+aiosqlite", "")
 else:
+    _query = {
+        "driver": settings.DB_DRIVER,
+        "TrustServerCertificate": _trust_cert,
+        "Connection Timeout": "30",
+    }
+    # ODBC 18 requires Encrypt=yes by default, but ODBC 17 can be picky
+    if "18" in settings.DB_DRIVER:
+        _query["Encrypt"] = "yes"
+    
     _sync_url = URL.create(
         drivername="mssql+pyodbc",
         username=settings.DB_USER,
@@ -30,12 +39,7 @@ else:
         host=settings.DB_HOST,
         port=settings.DB_PORT,
         database=settings.DB_NAME,
-        query={
-            "driver": settings.DB_DRIVER,
-            "Encrypt": "yes",
-            "TrustServerCertificate": _trust_cert,
-            "Connection Timeout": "30",
-        },
+        query=_query,
     )
 
 # ConfigParser (used by Alembic) interprets '%' as interpolation. Must escape it.
@@ -56,7 +60,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,
     )
 
     with context.begin_transaction():
@@ -74,7 +77,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,
         )
         with context.begin_transaction():
             context.run_migrations()

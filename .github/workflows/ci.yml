@@ -19,7 +19,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libglib2.0-dev
+          sudo apt-get install -y libcairo2-dev libglib2.0-dev unixodbc-dev
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
@@ -36,11 +40,21 @@ jobs:
       - name: Pre-commit checks
         run: poetry run pre-commit run --all-files
       - name: Run Backend Tests
-        run: poetry run pytest tests/ -v --cov=backend --cov-report=term-missing
+        run: |
+          docker compose up -d sqlserver
+          # Wait for SQL Server
+          until docker exec nlpdf_sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'NlpdfPass123!' -Q 'SELECT 1' -No; do
+            sleep 5
+          done
+          poetry run pytest tests/ -v --cov=backend --cov-report=term-missing
         env:
           APP_ENV: development
-          DATABASE_URL_OVERRIDE: sqlite+aiosqlite:///./test.db
-          DB_PASSWORD: mock # pragma: allowlist secret
+          DB_PASSWORD: NlpdfPass123! # pragma: allowlist secret
+          DB_HOST: localhost
+          DB_PORT: 1433
+          DB_NAME: master
+          DB_USER: sa
+          DB_DRIVER: ODBC Driver 18 for SQL Server
           HUGGINGFACE_API_TOKEN: mock # pragma: allowlist secret
           JWT_SECRET_KEY: ci-test-secret-key-at-least-32-chars-long # pragma: allowlist secret
           RESEND_API_KEY: mock # pragma: allowlist secret
@@ -82,7 +96,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libglib2.0-dev
+          sudo apt-get install -y libcairo2-dev libglib2.0-dev unixodbc-dev
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
@@ -90,6 +108,9 @@ jobs:
       - name: Install Backend Dependencies
         run: poetry install
       
+      - name: Start Database (SQL Server)
+        run: docker compose up -d sqlserver
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -106,7 +127,6 @@ jobs:
       - name: Start Backend Server
         run: | # pragma: allowlist secret
           echo "APP_ENV=development" > .env
-          echo "DATABASE_URL_OVERRIDE=sqlite+aiosqlite:///./e2e.db" >> .env
           echo "JWT_SECRET_KEY=ci-test-secret-key-at-least-32-chars-long" >> .env # pragma: allowlist secret
           echo "DB_HOST=localhost" >> .env
           echo "DB_PORT=1433" >> .env
@@ -118,6 +138,12 @@ jobs:
           echo "RESEND_API_KEY=mock" >> .env
           echo "TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
           echo "CLOUDFLARE_TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
+          
+          # Wait for SQL Server to be healthy
+          echo "Waiting for SQL Server..."
+          until docker exec nlpdf_sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'NlpdfPass123!' -Q 'SELECT 1' -No; do
+            sleep 5
+          done
           
           poetry run alembic upgrade head
           nohup poetry run uvicorn backend.main:app --port 8000 &
