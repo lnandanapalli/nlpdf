@@ -40,6 +40,7 @@ jobs:
         env:
           APP_ENV: development
           DATABASE_URL_OVERRIDE: sqlite+aiosqlite:///./test.db
+          DB_PASSWORD: mock # pragma: allowlist secret
           HUGGINGFACE_API_TOKEN: mock # pragma: allowlist secret
           JWT_SECRET_KEY: ci-test-secret-key-at-least-32-chars-long # pragma: allowlist secret
           RESEND_API_KEY: mock # pragma: allowlist secret
