@@ -8,19 +8,19 @@ from pydantic import BaseModel, EmailStr, Field
 class SignupRequest(BaseModel):
     """User registration request."""
 
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
-    cf_token: str
+    cf_token: str = Field(..., max_length=4096)
 
 
 class LoginRequest(BaseModel):
     """User login request."""
 
-    email: EmailStr
-    password: str
-    cf_token: str
+    email: EmailStr = Field(..., max_length=255)
+    password: str = Field(..., max_length=128)
+    cf_token: str = Field(..., max_length=4096)
 
 
 class UserResponse(BaseModel):
@@ -38,15 +38,15 @@ class UserResponse(BaseModel):
 class VerifyOTPRequest(BaseModel):
     """Request to verify an OTP."""
 
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=255)
     otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
-    cf_token: str
+    cf_token: str = Field(..., max_length=4096)
 
 
 class ResendOTPRequest(BaseModel):
     """Request to resend an OTP to an unverified email."""
 
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=255)
 
 
 class SuccessResponse(BaseModel):
@@ -65,14 +65,14 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """Request to change password."""
 
-    current_password: str
+    current_password: str = Field(..., max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class DeleteAccountRequest(BaseModel):
     """Request to initiate account deletion (step 1: verify password, send OTP)."""
 
-    password: str
+    password: str = Field(..., max_length=128)
 
 
 class DeleteAccountConfirmRequest(BaseModel):
@@ -84,17 +84,17 @@ class DeleteAccountConfirmRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     """Request to initiate password reset."""
 
-    email: EmailStr
-    cf_token: str
+    email: EmailStr = Field(..., max_length=255)
+    cf_token: str = Field(..., max_length=4096)
 
 
 class ResetPasswordRequest(BaseModel):
     """Request to complete password reset."""
 
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=255)
     otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
     new_password: str = Field(..., min_length=8, max_length=128)
-    cf_token: str
+    cf_token: str = Field(..., max_length=4096)
 
 
 class SessionResponse(BaseModel):

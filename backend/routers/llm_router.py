@@ -118,11 +118,12 @@ async def process_with_llm(
     message: Annotated[
         str,
         Form(
+            max_length=2000,
             description=(
                 "Natural language instruction for PDF processing. "
                 "Examples: 'compress this', 'extract first 10 pages', "
                 "'merge these files', 'convert to PDF'"
-            )
+            ),
         ),
     ],
 ) -> CleanupFileResponse:

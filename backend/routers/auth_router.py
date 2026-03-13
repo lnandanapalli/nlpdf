@@ -189,6 +189,7 @@ def _check_otp_expiry(otp_expires_at: datetime) -> None:
 
 
 @router.post("/signup", status_code=201)
+@limiter.limit("5/hour")
 async def signup(
     body: SignupRequest,
     background_tasks: BackgroundTasks,
@@ -231,6 +232,7 @@ async def signup(
 
 
 @router.post("/verify_otp")
+@limiter.limit("10/minute")
 async def verify_otp(
     body: VerifyOTPRequest,
     request: Request,
