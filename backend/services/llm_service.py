@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 import httpx
 from huggingface_hub import AsyncInferenceClient
 import structlog
@@ -83,7 +83,7 @@ class LLMService:
                 return await self._call_openai(messages)
             logger.exception("LLM API call failed")
             raise HTTPException(
-                status_code=503,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="LLM service unavailable. Please try again later.",
             ) from None
 
@@ -116,7 +116,7 @@ class LLMService:
         except Exception:  # BLE001 — httpx + OpenAI response errors are diverse
             logger.exception("OpenAI fallback failed")
             raise HTTPException(
-                status_code=503,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="LLM service unavailable. Please try again later.",
             ) from None
 
@@ -167,7 +167,7 @@ class LLMService:
             # Step 3: Check if LLM returned an error object
             if any("error" in item for item in parsed):
                 raise HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
                         "This operation cannot be performed. "
                         "Please describe a valid PDF operation."
@@ -193,7 +193,7 @@ class LLMService:
             retry_context,
         )
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not understand your request. " "Please try rephrasing your instruction.",
         )
 

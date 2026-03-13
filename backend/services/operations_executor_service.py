@@ -3,7 +3,7 @@
 from pathlib import Path
 import zipfile
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 import structlog
 
 from backend.schemas.llm_schema import (
@@ -44,20 +44,37 @@ def execute_operation(
     """
     if isinstance(operation, MergeOperation) and len(input_paths) < MIN_FILES_FOR_MERGE:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=("Merge requires multiple files. " f"Only {len(input_paths)} file(s) provided."),
         )
+
+    def _invalid() -> None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This operation cannot be performed. " "Please describe a valid PDF operation."
+            ),
+        )
+
     try:
         if isinstance(operation, MergeOperation):
+            for path in input_paths:
+                if path.suffix.lower() != ".pdf":
+                    _invalid()
             return merge_pdfs(input_paths, output_path)
 
         # For non-merge operations, execute on the first provided file
         main_input = input_paths[0]
+        ext = main_input.suffix.lower()
 
         if isinstance(operation, CompressOperation):
+            if ext != ".pdf":
+                _invalid()
             return compress_pdf(main_input, output_path, operation.parameters.level)
 
         if isinstance(operation, SplitOperation):
+            if ext != ".pdf":
+                _invalid()
             params = operation.parameters
             if not params.merge:
                 output_path = output_path.with_suffix(".zip")
@@ -70,9 +87,13 @@ def execute_operation(
             )
 
         if isinstance(operation, RotateOperation):
+            if ext != ".pdf":
+                _invalid()
             return rotate_pdf(main_input, operation.parameters.rotations, output_path)
 
         if isinstance(operation, MarkdownToPdfOperation):
+            if ext != ".md":
+                _invalid()
             return markdown_to_pdf(main_input, output_path, operation.parameters.paper_size)
 
     except HTTPException:
@@ -80,18 +101,18 @@ def execute_operation(
     except ValueError as e:
         logger.warning("Validation error in %s: %s", operation.operation, e)
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="The operation could not be completed. Please check "
             "that your page numbers and ranges are valid for the uploaded document.",
         ) from e
     except Exception:
         logger.exception("Operation %s failed", operation.operation)
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong while processing your file. Please try again.",
         ) from None
 
-    raise HTTPException(status_code=400, detail="Unknown operation")
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown operation")
 
 
 def _is_bulk(operation: OperationType, input_count: int) -> bool:
@@ -195,7 +216,9 @@ def execute_operation_chain(
             pass
 
     if result_path is None:
-        raise HTTPException(status_code=400, detail="No operations to execute")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No operations to execute"
+        )
     return result_path
 
 

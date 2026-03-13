@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 
+from fastapi import HTTPException, status
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 import structlog
@@ -50,6 +51,12 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         try:
             yield session
             await session.commit()
+        except HTTPException as e:
+            await session.rollback()
+            # 4xx errors are "user errors" or expected logic — don't log tracebacks
+            if e.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
+                logger.exception("db_session_error", status_code=e.status_code)
+            raise
         except Exception:
             await session.rollback()
             logger.exception("db_session_error")

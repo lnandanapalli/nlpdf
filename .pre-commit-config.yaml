@@ -25,3 +25,17 @@ repos:
         entry: poetry run bandit -c pyproject.toml
         language: system
         types: [python]
+
+      - id: pip-audit
+        name: pip-audit
+        entry: poetry run pip-audit
+        language: system
+        files: ^(pyproject\.toml|poetry\.lock)$
+        pass_filenames: false
+
+      - id: detect-secrets
+        name: detect-secrets
+        entry: poetry run detect-secrets-hook --baseline .secrets.baseline
+        language: system
+        types: [text]
+        exclude: ^\.secrets\.baseline$

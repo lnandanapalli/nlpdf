@@ -15,6 +15,7 @@ SCALE_FACTORS = {1: 0.6, 2: 0.4, 3: 0.2}
 JPEG_QUALITY = 40
 MAX_PDF_PAGES = 5000
 MIN_IMAGE_DIMENSION = 50  # Skip tiny images — not worth recompressing
+MAX_IMAGE_PIXELS = 100 * 1000 * 1000  # 100 Megapixels — safeguard against OOM for massive images
 
 
 def compress_pdf(input_path: Path, output_path: Path, level: int) -> Path:
@@ -56,6 +57,14 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
             pdf_image = PdfImage(raw_stream)
 
             if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
+                continue
+
+            if (pdf_image.width * pdf_image.height) > MAX_IMAGE_PIXELS:
+                logger.warning(
+                    "Skipping massive image to prevent OOM",
+                    width=pdf_image.width,
+                    height=pdf_image.height,
+                )
                 continue
 
             current_filter = raw_stream.get("/Filter")

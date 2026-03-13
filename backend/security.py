@@ -1,5 +1,6 @@
 """Security utilities and middleware for the NLPDF API."""
 
+import codecs
 from pathlib import Path
 import shutil
 import tempfile
@@ -7,7 +8,7 @@ from typing import Any
 
 import anyio
 from anyio import to_thread
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 import pikepdf
 import structlog
@@ -31,6 +32,10 @@ def _sanitize_pdf_sync(file_path: Path) -> None:
     try:
         with pikepdf.open(file_path, allow_overwriting_input=True) as pdf:
             pdf.save(file_path)
+    except pikepdf.PasswordError:
+        raise ValueError(
+            "This PDF is password-protected or encrypted. Please remove protection and try again."
+        ) from None
     except pikepdf.PdfError as e:
         raise ValueError(f"Corrupted or invalid PDF structure: {e}") from e
 
@@ -67,7 +72,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
             if first_chunk:
                 if not chunk[:5].startswith(PDF_MAGIC_BYTES):
                     error = HTTPException(
-                        status_code=400,
+                        status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"File '{upload.filename}' is not a valid PDF",
                     )
                     break
@@ -78,7 +83,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
 
             if total_size > MAX_FILE_SIZE_BYTES:
                 error = HTTPException(
-                    status_code=413,
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
                 )
@@ -87,7 +92,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
             if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
                 limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
                 error = HTTPException(
-                    status_code=413,
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
@@ -101,7 +106,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
     if total_size == 0:
         await anyio.Path(dest).unlink(missing_ok=True)
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File '{upload.filename}' is empty",
         )
 
@@ -110,7 +115,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
     except ValueError as e:
         await anyio.Path(dest).unlink(missing_ok=True)
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Security scan failed for '{upload.filename}': {e}",
         ) from e
 
@@ -124,27 +129,24 @@ async def validate_and_save_markdown(
     Validate an uploaded file is a valid markdown text file and save it.
 
     Reads in chunks to enforce size limits without loading the entire file.
-    Validates that content is valid UTF-8 text.
-
-    Args:
-        upload: The uploaded file from FastAPI
-        dest: Destination path to save the file
-        current_total_size: Total bytes uploaded so far in this request
-
-    Returns:
-        Updated total bytes uploaded across all files
-
-    Raises:
-        HTTPException: If any size limit is exceeded, not valid UTF-8, or empty
+    Uses an IncrementalDecoder to safely handle UTF-8 characters split across chunks.
     """
     total_size = 0
     chunk_size = 1024 * 1024  # 1 MB chunks
     error: HTTPException | None = None
+    decoder = codecs.getincrementaldecoder("utf-8")()
 
     async with await anyio.open_file(dest, "wb") as f:
         while True:
             chunk = await upload.read(chunk_size)
             if not chunk:
+                try:
+                    decoder.decode(b"", final=True)
+                except UnicodeDecodeError:
+                    error = HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"File '{upload.filename}' is not valid UTF-8 text",
+                    )
                 break
 
             total_size += len(chunk)
@@ -152,7 +154,7 @@ async def validate_and_save_markdown(
 
             if total_size > MAX_MARKDOWN_SIZE_BYTES:
                 error = HTTPException(
-                    status_code=413,
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_MARKDOWN_SIZE_BYTES // (1024 * 1024)} MB",
                 )
@@ -161,16 +163,16 @@ async def validate_and_save_markdown(
             if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
                 limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
                 error = HTTPException(
-                    status_code=413,
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
 
             try:
-                chunk.decode("utf-8")
+                decoder.decode(chunk, final=False)
             except UnicodeDecodeError:
                 error = HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"File '{upload.filename}' is not valid UTF-8 text",
                 )
                 break
@@ -184,7 +186,7 @@ async def validate_and_save_markdown(
     if total_size == 0:
         await anyio.Path(dest).unlink(missing_ok=True)
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File '{upload.filename}' is empty",
         )
 
