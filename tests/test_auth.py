@@ -293,10 +293,8 @@ class TestMe:
             client, "me@example.com", "securepass123"
         )
 
-        resp = await client.get(
-            "/auth/me",
-            cookies={"access_token": cookies["access_token"]},
-        )
+        client.cookies.set("access_token", cookies["access_token"])
+        resp = await client.get("/auth/me")
         assert resp.status_code == 200
         data = resp.json()
         assert data["email"] == "me@example.com"
@@ -317,11 +315,8 @@ class TestRefresh:
             client, "refresh@example.com", "securepass123"
         )
 
-        resp = await client.post(
-            "/auth/refresh",
-            cookies={"refresh_token": cookies["refresh_token"]},
-            json={},
-        )
+        client.cookies.set("refresh_token", cookies["refresh_token"])
+        resp = await client.post("/auth/refresh", json={})
         assert resp.status_code == 200
         new_cookies = _extract_cookies(resp)
         assert "access_token" in new_cookies
@@ -341,11 +336,8 @@ class TestRefresh:
         )
 
         # Use the access_token as if it were a refresh_token
-        resp = await client.post(
-            "/auth/refresh",
-            cookies={"refresh_token": cookies["access_token"]},
-            json={},
-        )
+        client.cookies.set("refresh_token", cookies["access_token"])
+        resp = await client.post("/auth/refresh", json={})
         assert resp.status_code == 401
 
     async def test_refresh_with_expired_token_returns_401(self, client):
@@ -364,11 +356,8 @@ class TestRefresh:
             algorithm=settings.JWT_ALGORITHM,
         )
 
-        resp = await client.post(
-            "/auth/refresh",
-            cookies={"refresh_token": expired_token},
-            json={},
-        )
+        client.cookies.set("refresh_token", expired_token)
+        resp = await client.post("/auth/refresh", json={})
         assert resp.status_code == 401
 
 
@@ -380,10 +369,8 @@ class TestLogout:
             client, "logout@example.com", "securepass123"
         )
 
-        resp = await client.post(
-            "/auth/logout",
-            cookies={"access_token": cookies["access_token"]},
-        )
+        client.cookies.set("access_token", cookies["access_token"])
+        resp = await client.post("/auth/logout")
         assert resp.status_code == 200
         data = resp.json()
         assert data["message"] == "Logged out successfully"
@@ -414,10 +401,10 @@ class TestUpdateProfile:
             client, "profile@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.put(
             "/auth/profile",
             json={"first_name": "New", "last_name": "Name"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -436,10 +423,10 @@ class TestUpdateProfile:
             client, "empty@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.put(
             "/auth/profile",
             json={"first_name": "", "last_name": "Name"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 422
 
@@ -452,13 +439,13 @@ class TestChangePassword:
             client, "chpw@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.post(
             "/auth/change-password",
             json={
                 "current_password": "securepass123",
                 "new_password": "newsecurepass456",
             },
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 200
         assert resp.json()["message"] == "Password changed successfully"
@@ -479,13 +466,13 @@ class TestChangePassword:
             client, "wrongpw@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.post(
             "/auth/change-password",
             json={
                 "current_password": "wrongpassword",
                 "new_password": "newsecurepass456",
             },
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
         assert "incorrect" in resp.json()["detail"].lower()
@@ -495,10 +482,10 @@ class TestChangePassword:
             client, "samepw@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.post(
             "/auth/change-password",
             json={"current_password": "securepass123", "new_password": "securepass123"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
         assert "different" in resp.json()["detail"].lower()
@@ -523,10 +510,10 @@ class TestDeleteAccount:
         )
 
         # Step 1: Request deletion
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.post(
             "/auth/delete-account/request",
             json={"password": "securepass123"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 200
         assert "Confirmation code" in resp.json()["message"]
@@ -539,10 +526,10 @@ class TestDeleteAccount:
             otp_code = user.otp_code
 
         # Step 2: Confirm deletion
+        # Cookie is already in the client from step 1
         resp = await client.post(
             "/auth/delete-account/confirm",
             json={"otp_code": otp_code},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 200
         assert "deleted" in resp.json()["message"].lower()
@@ -558,15 +545,15 @@ class TestDeleteAccount:
             client, "delbadpw@example.com", "securepass123"
         )
 
+        client.cookies.set("access_token", cookies["access_token"])
         resp = await client.post(
             "/auth/delete-account/request",
             json={"password": "wrongpassword"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
 
     async def test_delete_account_wrong_otp(self, client):
-        cookies = await _create_verified_user_and_get_cookies(
+        await _create_verified_user_and_get_cookies(
             client, "delbadotp@example.com", "securepass123"
         )
 
@@ -574,39 +561,31 @@ class TestDeleteAccount:
         await client.post(
             "/auth/delete-account/request",
             json={"password": "securepass123"},
-            cookies={"access_token": cookies["access_token"]},
         )
 
         # Confirm with wrong OTP
         resp = await client.post(
             "/auth/delete-account/confirm",
             json={"otp_code": "000000"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
 
     async def test_delete_account_no_active_otp(self, client):
-        cookies = await _create_verified_user_and_get_cookies(
-            client, "delnootp@example.com", "securepass123"
-        )
+        await _create_verified_user_and_get_cookies(client, "delnootp@example.com", "securepass123")
 
         resp = await client.post(
             "/auth/delete-account/confirm",
             json={"otp_code": "123456"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
 
     async def test_delete_account_expired_otp(self, client):
-        cookies = await _create_verified_user_and_get_cookies(
-            client, "delexp@example.com", "securepass123"
-        )
+        await _create_verified_user_and_get_cookies(client, "delexp@example.com", "securepass123")
 
         # Request deletion
         await client.post(
             "/auth/delete-account/request",
             json={"password": "securepass123"},
-            cookies={"access_token": cookies["access_token"]},
         )
 
         # Manually expire the OTP
@@ -620,7 +599,6 @@ class TestDeleteAccount:
         resp = await client.post(
             "/auth/delete-account/confirm",
             json={"otp_code": "123456"},
-            cookies={"access_token": cookies["access_token"]},
         )
         assert resp.status_code == 400
 
@@ -673,10 +651,8 @@ class TestCSRF:
         assert resp.status_code == 200
 
     async def test_missing_csrf_header_returns_403(self, csrf_client):
-        resp = await csrf_client.post(
-            "/protected",
-            cookies={"csrf_token": "abc123"},
-        )
+        csrf_client.cookies.set("csrf_token", "abc123")
+        resp = await csrf_client.post("/protected")
         assert resp.status_code == 403
         assert "Missing CSRF token" in resp.json()["detail"]
 
@@ -689,9 +665,9 @@ class TestCSRF:
         assert "Missing CSRF token" in resp.json()["detail"]
 
     async def test_csrf_mismatch_returns_403(self, csrf_client):
+        csrf_client.cookies.set("csrf_token", "correct_token")
         resp = await csrf_client.post(
             "/protected",
-            cookies={"csrf_token": "correct_token"},
             headers={"X-CSRF-Token": "wrong_token"},
         )
         assert resp.status_code == 403
@@ -702,9 +678,10 @@ class TestCSRF:
 
         access = "dummy_access"
         token = make_csrf_token(access)
+        csrf_client.cookies.set("csrf_token", token)
+        csrf_client.cookies.set("access_token", access)
         resp = await csrf_client.post(
             "/protected",
-            cookies={"csrf_token": token, "access_token": access},
             headers={"X-CSRF-Token": token},
         )
         assert resp.status_code == 200

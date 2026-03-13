@@ -25,6 +25,8 @@ logger = structlog.get_logger(__name__)
 # Operations that support bulk mode (apply to each file individually)
 BULK_OPERATIONS = (CompressOperation, MarkdownToPdfOperation)
 MIN_FILES_FOR_MERGE = 2
+MAX_OPERATIONS_PER_CHAIN = 10
+MAX_SPLIT_RANGES = 50
 
 
 def execute_operation(
@@ -54,6 +56,15 @@ def execute_operation(
             detail=(
                 "This operation cannot be performed. " "Please describe a valid PDF operation."
             ),
+        )
+
+    if (
+        isinstance(operation, SplitOperation)
+        and len(operation.parameters.page_ranges) > MAX_SPLIT_RANGES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many split ranges. Maximum {MAX_SPLIT_RANGES} allowed.",
         )
 
     try:
@@ -161,8 +172,14 @@ def execute_operation_chain(
         Path to the final output file (or ZIP of results).
 
     Raises:
-        HTTPException: If any operation fails.
+        HTTPException: If any operation fails or limits are exceeded.
     """
+    if len(operations) > MAX_OPERATIONS_PER_CHAIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Instruction too complex. Maximum {MAX_OPERATIONS_PER_CHAIN} steps allowed.",
+        )
+
     if original_filenames is None:
         original_filenames = [original_filename]
 

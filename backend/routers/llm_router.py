@@ -5,7 +5,7 @@ import re
 from typing import Annotated, Any
 import uuid
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -15,6 +15,7 @@ from backend.auth.dependencies import get_current_user
 from backend.crud.document_crud import create_document
 from backend.database import get_db
 from backend.models.user import User
+from backend.rate_limit import limiter
 from backend.security import (
     ALLOWED_EXTENSIONS,
     MAX_MERGE_FILES,
@@ -107,7 +108,9 @@ async def _gather_metadata(input_paths: list[Path], *, is_markdown: bool) -> tup
 
 
 @router.post("/process")
+@limiter.limit("10/minute")
 async def process_with_llm(
+    request: Request,
     llm_service: LLMServiceDep,
     current_user: CurrentUser,
     db: DB,

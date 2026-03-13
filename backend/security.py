@@ -83,7 +83,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
 
             if total_size > MAX_FILE_SIZE_BYTES:
                 error = HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
                 )
@@ -92,7 +92,7 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
             if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
                 limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
                 error = HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
@@ -154,7 +154,7 @@ async def validate_and_save_markdown(
 
             if total_size > MAX_MARKDOWN_SIZE_BYTES:
                 error = HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"File '{upload.filename}' exceeds maximum size "
                     f"of {MAX_MARKDOWN_SIZE_BYTES // (1024 * 1024)} MB",
                 )
@@ -163,7 +163,7 @@ async def validate_and_save_markdown(
             if current_total_size > MAX_TOTAL_UPLOAD_SIZE_BYTES:
                 limit_mb = MAX_TOTAL_UPLOAD_SIZE_BYTES // (1024 * 1024)
                 error = HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"Total upload size exceeds maximum allowed of {limit_mb} MB",
                 )
                 break
