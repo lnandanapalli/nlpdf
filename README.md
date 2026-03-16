@@ -2,7 +2,7 @@
 
 AI-powered PDF processing using natural language.
 
-<video src="demo/demo.mp4" controls width="100%"></video>
+![Demo](demo/demo.gif)
 
 Upload PDFs and describe what you want in plain English. The system uses Llama 3.1 (via HuggingFace) to parse your instructions and executes the operations. If HuggingFace is unavailable, requests automatically fall back to OpenAI gpt-4o-mini.
 
