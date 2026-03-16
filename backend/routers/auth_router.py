@@ -367,7 +367,6 @@ async def login(
                 detail="Account temporarily locked due to too many failed "
                 "login attempts. Please try again later.",
             )
-        await reset_failed_logins(db, user)
 
     if not verify_password(body.password, user.hashed_password):
         await record_failed_login(db, user)

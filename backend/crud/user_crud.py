@@ -86,9 +86,22 @@ async def mark_user_verified(db: AsyncSession, user: User) -> None:
 
 
 async def record_failed_login(db: AsyncSession, user: User) -> None:
-    """Increment failed login counter and lock after 5 failures."""
-    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-    if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+    """Atomically increment failed login counter and lock after 5 failures.
+
+    Uses SQL UPDATE failed_login_attempts = failed_login_attempts + 1 RETURNING
+    instead of a Python read-modify-write, preventing the TOCTOU race where
+    two parallel requests both read the same stale count and both slip through
+    the lockout gate.
+    """
+    result = await db.execute(
+        update(User)
+        .where(User.id == user.id)
+        .values(failed_login_attempts=User.failed_login_attempts + 1)
+        .returning(User.failed_login_attempts)
+    )
+    new_count: int = result.scalar_one()
+    user.failed_login_attempts = new_count  # keep in-memory object consistent
+    if new_count >= MAX_FAILED_LOGIN_ATTEMPTS:
         user.locked_until = datetime.now(UTC) + timedelta(minutes=15)
 
 
