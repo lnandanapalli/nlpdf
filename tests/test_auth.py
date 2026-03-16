@@ -69,8 +69,19 @@ def _mock_email():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _mock_otp():
+    """Pin OTP to a known value so tests can verify without reading the hashed DB value."""
+    with patch(
+        "backend.routers.auth_router.generate_otp",
+        return_value=FIXED_OTP,
+    ):
+        yield
+
+
 CF_TOKEN = "test-token"
 SIGNUP_NAMES = {"first_name": "Test", "last_name": "User"}
+FIXED_OTP = "123456"
 
 
 @pytest.fixture(autouse=True)
@@ -113,19 +124,10 @@ def _signup_payload(email, password, **overrides):
 
 async def _create_verified_user_and_get_cookies(client, email, password):
     """Helper: signup, verify OTP, return cookies dict from verify_otp response."""
-    # 1. Signup
     await client.post("/auth/signup", json=_signup_payload(email, password))
-
-    # 2. Extract OTP from DB
-    async with TestSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalars().first()
-        assert user is not None, f"User {email} not found in DB"
-        otp_code = user.otp_code
-
-    # 3. Verify OTP
     resp = await client.post(
-        "/auth/verify_otp", json={"email": email, "otp_code": otp_code, "cf_token": CF_TOKEN}
+        "/auth/verify_otp",
+        json={"email": email, "otp_code": FIXED_OTP, "cf_token": CF_TOKEN},
     )
     assert resp.status_code == 200
     cookies = _extract_cookies(resp)
@@ -193,14 +195,9 @@ class TestOTP:
         email = "otp@example.com"
         await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
-        async with TestSessionLocal() as db:
-            result = await db.execute(select(User).where(User.email == email))
-            user = result.scalars().first()
-            assert user is not None, f"User {email} not found in DB"
-            otp_code = user.otp_code
-
         resp = await client.post(
-            "/auth/verify_otp", json={"email": email, "otp_code": otp_code, "cf_token": CF_TOKEN}
+            "/auth/verify_otp",
+            json={"email": email, "otp_code": FIXED_OTP, "cf_token": CF_TOKEN},
         )
         assert resp.status_code == 200
         cookies = _extract_cookies(resp)
@@ -518,18 +515,10 @@ class TestDeleteAccount:
         assert resp.status_code == 200
         assert "Confirmation code" in resp.json()["message"]
 
-        # Extract OTP from DB
-        async with TestSessionLocal() as db:
-            result = await db.execute(select(User).where(User.email == "delete@example.com"))
-            user = result.scalars().first()
-            assert user is not None
-            otp_code = user.otp_code
-
-        # Step 2: Confirm deletion
-        # Cookie is already in the client from step 1
+        # Step 2: Confirm deletion (OTP is mocked to FIXED_OTP)
         resp = await client.post(
             "/auth/delete-account/confirm",
-            json={"otp_code": otp_code},
+            json={"otp_code": FIXED_OTP},
         )
         assert resp.status_code == 200
         assert "deleted" in resp.json()["message"].lower()

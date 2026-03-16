@@ -3,6 +3,8 @@
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MIN_JWT_SECRET_LENGTH = 32
+
 
 class Settings(BaseSettings):
     """Application settings from environment variables."""
@@ -71,6 +73,9 @@ class Settings(BaseSettings):
         # Treat empty string as None (env var set but blank)
         if self.COOKIE_DOMAIN is not None and self.COOKIE_DOMAIN.strip() == "":
             self.COOKIE_DOMAIN = None
+        # Reject weak JWT secrets in production
+        if self.APP_ENV != "development" and len(self.JWT_SECRET_KEY) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError("JWT_SECRET_KEY must be at least 32 characters in production")
         return self
 
 

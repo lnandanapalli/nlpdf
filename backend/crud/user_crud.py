@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth.password import hash_otp
 from backend.models.user import OTPPurpose, User
 
 MAX_OTP_ATTEMPTS: int = 5
@@ -43,8 +44,12 @@ async def update_user_otp(
     expires_at: datetime,
     purpose: OTPPurpose = OTPPurpose.SIGNUP,
 ) -> None:
-    """Update the OTP code and expiration for a user, resetting attempt counter."""
-    user.otp_code = otp_code
+    """Update the OTP code and expiration for a user, resetting attempt counter.
+
+    The plain OTP is hashed with SHA-256 before storage so a database
+    compromise does not expose usable codes.
+    """
+    user.otp_code = hash_otp(otp_code)
     user.otp_expires_at = expires_at
     user.otp_purpose = purpose
     user.otp_attempts = 0

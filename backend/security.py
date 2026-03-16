@@ -114,9 +114,10 @@ async def validate_and_save_pdf(upload: UploadFile, dest: Path, current_total_si
         await to_thread.run_sync(_sanitize_pdf_sync, dest)
     except ValueError as e:
         await anyio.Path(dest).unlink(missing_ok=True)
+        logger.warning("pdf_sanitization_failed", filename=upload.filename, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Security scan failed for '{upload.filename}': {e}",
+            detail="The uploaded file could not be verified as a valid PDF.",
         ) from e
 
     return current_total_size

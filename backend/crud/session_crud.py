@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.session import Session
@@ -93,3 +94,12 @@ async def delete_session_by_id(db: AsyncSession, session_id: int, user_id: int) 
 async def delete_all_user_sessions(db: AsyncSession, user_id: int) -> None:
     """Revoke all sessions for a user (password change / logout-all)."""
     await db.execute(delete(Session).where(Session.user_id == user_id))
+
+
+async def delete_expired_sessions(db: AsyncSession) -> int:
+    """Delete all expired sessions. Returns the count of deleted rows."""
+    result = cast(
+        "CursorResult",
+        await db.execute(delete(Session).where(Session.expires_at <= datetime.now(UTC))),
+    )
+    return result.rowcount

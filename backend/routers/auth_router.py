@@ -25,7 +25,13 @@ from backend.auth.jwt import (
     create_refresh_token,
     decode_refresh_token,
 )
-from backend.auth.password import DUMMY_HASH, hash_password, verify_password
+from backend.auth.password import (
+    DUMMY_HASH,
+    DUMMY_OTP_HASH,
+    hash_otp,
+    hash_password,
+    verify_password,
+)
 from backend.config import settings
 from backend.crud.session_crud import (
     SessionCreate,
@@ -250,28 +256,28 @@ async def verify_otp(
     user = await get_user_by_email(db, body.email)
 
     if user is None:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code",
         )
 
     if user.is_verified:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code",
         )
 
     if user.otp_code is None or user.otp_expires_at is None:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code",
         )
 
     if user.otp_purpose != OTPPurpose.SIGNUP:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="OTP is intended for a different operation",
@@ -286,7 +292,7 @@ async def verify_otp(
     _check_otp_expiry(user.otp_expires_at)
 
     # C4: constant-time comparison to prevent timing side-channel attack
-    if not hmac.compare_digest(str(user.otp_code), body.otp_code):
+    if not hmac.compare_digest(str(user.otp_code), hash_otp(body.otp_code)):
         new_attempts = await increment_otp_attempts(db, user)
         if new_attempts >= MAX_OTP_ATTEMPTS:
             raise HTTPException(
@@ -640,7 +646,7 @@ async def confirm_account_deletion(
         )
 
     # C4: constant-time comparison
-    if not hmac.compare_digest(str(current_user.otp_code), body.otp_code):
+    if not hmac.compare_digest(str(current_user.otp_code), hash_otp(body.otp_code)):
         new_attempts = await increment_otp_attempts(db, current_user)
         if new_attempts >= MAX_OTP_ATTEMPTS:
             raise HTTPException(
@@ -719,21 +725,21 @@ async def reset_password(
     user = await get_user_by_email(db, body.email)
 
     if user is None:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired reset code.",
         )
 
     if user.otp_code is None or user.otp_expires_at is None:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired reset code.",
         )
 
     if user.otp_purpose != OTPPurpose.PASSWORD_RESET:
-        hmac.compare_digest("dummy", body.otp_code)
+        hmac.compare_digest(DUMMY_OTP_HASH, hash_otp(body.otp_code))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="OTP is intended for a different operation",
@@ -748,7 +754,7 @@ async def reset_password(
     _check_otp_expiry(user.otp_expires_at)
 
     # C4: constant-time comparison
-    if not hmac.compare_digest(str(user.otp_code), body.otp_code):
+    if not hmac.compare_digest(str(user.otp_code), hash_otp(body.otp_code)):
         new_attempts = await increment_otp_attempts(db, user)
         if new_attempts >= MAX_OTP_ATTEMPTS:
             raise HTTPException(

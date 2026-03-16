@@ -36,7 +36,7 @@ class User(Base):
 
     # Verification
     is_verified: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    otp_code: Mapped[str | None] = mapped_column(String(6), nullable=True)
+    otp_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     otp_purpose: Mapped[OTPPurpose | None] = mapped_column(
         SQLEnum(OTPPurpose, native_enum=False, length=20), nullable=True

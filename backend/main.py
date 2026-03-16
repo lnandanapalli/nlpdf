@@ -28,6 +28,8 @@ from backend.logging import setup_logging
 from backend.rate_limit import limiter
 from backend.routers.auth_router import router as auth_router
 from backend.routers.llm_router import router as llm_router
+from backend.crud.session_crud import delete_expired_sessions
+from backend.database import AsyncSessionLocal
 from backend.security import UPLOAD_DIR
 
 # Initialize structured logging before anything else
@@ -58,14 +60,27 @@ def _cleanup_old_uploads(max_age_seconds: int = 3600) -> None:
         logger.info("startup_cleanup", removed=removed)
 
 
+async def _cleanup_expired_sessions() -> None:
+    """Delete expired session rows from the database."""
+    try:
+        async with AsyncSessionLocal() as db:
+            removed = await delete_expired_sessions(db)
+            await db.commit()
+            if removed:
+                logger.info("expired_sessions_cleaned", removed=removed)
+    except Exception:
+        logger.exception("session_cleanup_error")
+
+
 async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
-    """Background task to clean up old uploads periodically."""
+    """Background task to clean up old uploads and expired sessions periodically."""
     while True:
         await asyncio.sleep(interval_seconds)
         try:
             _cleanup_old_uploads()
         except Exception:  # periodic background task — any failure must not crash the app
             logger.exception("periodic_cleanup_error")
+        await _cleanup_expired_sessions()
 
 
 @asynccontextmanager
