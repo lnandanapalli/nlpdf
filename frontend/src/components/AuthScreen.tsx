@@ -422,7 +422,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                       />
                       <FormControlLabel
                         control={<Checkbox checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} size="small" />}
-                        label={<Typography variant="body2">I agree to the <Link component={RouterLink} to="/terms" target="_blank">Terms</Link></Typography>}
+                        label={<Typography variant="body2">I agree to the <Link component={RouterLink} to="/terms" target="_blank">Terms</Link> and <Link component={RouterLink} to="/privacy" target="_blank">Privacy Policy</Link></Typography>}
                         sx={{ mb: 2, alignItems: 'flex-start' }}
                       />
                     </>
