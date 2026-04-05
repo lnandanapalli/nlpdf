@@ -15,10 +15,10 @@ Upload PDFs and describe what you want in plain English. The system uses Llama 3
 
 ## Features
 
-- **Natural Language Parsing** — Llama 3.1 via HuggingFace Inference API, with automatic OpenAI fallback on failure
-- **PDF Operations** — Compress, split, merge, rotate, markdown-to-PDF (chainable and deterministic)
-- **Auth** — httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
-- **Security & Robustness** — File validation, CAPTCHA, rate limiting, Argon2id hashing, OOM protection for massive images, and safe Unicode chunked decoding for large files
+- **Natural Language Parsing** -Llama 3.1 via HuggingFace Inference API, with automatic OpenAI fallback on failure
+- **PDF Operations** -Compress, split, merge, rotate, markdown-to-PDF (chainable and deterministic)
+- **Auth** -httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
+- **Security & Robustness** -File validation, CAPTCHA, rate limiting, Argon2id hashing, OOM protection for massive images, and safe Unicode chunked decoding for large files
 
 ## Tech Stack
 
