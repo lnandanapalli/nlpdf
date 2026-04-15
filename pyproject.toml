@@ -11,7 +11,7 @@ python = "^3.13"
 fastapi = "^0.135.1"
 uvicorn = {extras = ["standard"], version = "^0.41.0"}
 pypdf = ">=6.7.5"
-python-multipart = "^0.0.22"
+python-multipart = ">=0.0.22,<0.0.27"
 pikepdf = "^10.5.0"
 slowapi = "^0.1.9"
 huggingface-hub = "^1.7.1"
