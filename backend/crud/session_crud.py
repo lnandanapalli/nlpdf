@@ -74,6 +74,7 @@ async def rotate_session_jti(
     session.jti = new_jti
     session.last_used_at = datetime.now(UTC)
     session.expires_at = new_expires_at
+    await db.flush()
 
 
 async def delete_session_by_jti(db: AsyncSession, jti: str) -> None:

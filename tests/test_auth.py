@@ -65,6 +65,10 @@ def _mock_email():
             "backend.routers.auth_router.send_account_deletion_otp_email",
             new=MagicMock(),
         ),
+        patch(
+            "backend.routers.auth_router.send_password_reset_otp_email",
+            new=MagicMock(),
+        ),
     ):
         yield
 
@@ -596,6 +600,189 @@ class TestDeleteAccount:
             "/auth/delete-account/request",
             json={"password": "securepass123"},
         )
+        assert resp.status_code == 401
+
+
+class TestForgotPassword:
+    """Tests for POST /auth/forgot-password and POST /auth/reset-password."""
+
+    async def test_forgot_password_persists_otp_to_db(self, client):
+        """Regression: OTP must be written to DB, not just sent via email."""
+        email = "forgot@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        resp = await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+        assert resp.status_code == 200
+
+        # Verify OTP was persisted to the database
+        async with TestSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            assert user is not None
+            assert user.otp_code is not None, "OTP was not persisted to DB"
+            assert user.otp_expires_at is not None, "OTP expiry was not set"
+            assert user.otp_purpose == "password_reset"
+            assert user.otp_attempts == 0
+
+    async def test_forgot_password_nonexistent_email_returns_200(self, client):
+        resp = await client.post(
+            "/auth/forgot-password",
+            json={"email": "nobody@example.com", "cf_token": CF_TOKEN},
+        )
+        assert resp.status_code == 200
+        assert "reset code" in resp.json()["message"]
+
+    async def test_forgot_password_unverified_user_returns_200(self, client):
+        await client.post(
+            "/auth/signup",
+            json=_signup_payload("unverified_forgot@example.com", "securepass123"),
+        )
+        resp = await client.post(
+            "/auth/forgot-password",
+            json={"email": "unverified_forgot@example.com", "cf_token": CF_TOKEN},
+        )
+        assert resp.status_code == 200
+
+    async def test_reset_password_success(self, client):
+        email = "reset@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        # Request password reset
+        resp = await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+        assert resp.status_code == 200
+
+        # Reset password with correct OTP
+        resp = await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass456",  # pragma: allowlist secret
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert resp.status_code == 200
+        assert "reset successfully" in resp.json()["message"].lower()
+
+        # Verify login with new password works
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": email, "password": "brandnewpass456", "cf_token": CF_TOKEN},
+        )
+        assert login_resp.status_code == 200
+
+    async def test_reset_password_old_password_fails(self, client):
+        email = "resetold@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+        await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+
+        # Old password should no longer work
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": email, "password": "securepass123", "cf_token": CF_TOKEN},
+        )
+        assert login_resp.status_code == 401
+
+    async def test_reset_password_wrong_otp(self, client):
+        email = "wrongotp@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+
+        resp = await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": "000000",
+                "new_password": "brandnewpass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert resp.status_code == 401
+
+    async def test_reset_password_expired_otp(self, client):
+        email = "expiredotp@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+
+        # Manually expire the OTP
+        async with TestSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            assert user is not None
+            user.otp_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+            await db.commit()
+
+        resp = await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert resp.status_code == 401
+
+    async def test_reset_password_nonexistent_email(self, client):
+        resp = await client.post(
+            "/auth/reset-password",
+            json={
+                "email": "nobody@example.com",
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert resp.status_code == 401
+
+    async def test_reset_password_revokes_all_sessions(self, client):
+        email = "revoke@example.com"
+        cookies = await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        await client.post(
+            "/auth/forgot-password",
+            json={"email": email, "cf_token": CF_TOKEN},
+        )
+        await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass456",
+                "cf_token": CF_TOKEN,
+            },
+        )
+
+        # Old access token should be invalid
+        client.cookies.set("access_token", cookies["access_token"])
+        resp = await client.get("/auth/me")
         assert resp.status_code == 401
 
 

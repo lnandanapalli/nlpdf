@@ -53,6 +53,7 @@ async def update_user_otp(
     user.otp_expires_at = expires_at
     user.otp_purpose = purpose
     user.otp_attempts = 0
+    await db.flush()
 
 
 async def increment_otp_attempts(db: AsyncSession, user: User) -> int:
@@ -88,6 +89,7 @@ async def mark_user_verified(db: AsyncSession, user: User) -> None:
     user.otp_expires_at = None
     user.otp_purpose = None
     user.otp_attempts = 0
+    await db.flush()
 
 
 async def record_failed_login(db: AsyncSession, user: User) -> None:
@@ -114,17 +116,20 @@ async def reset_failed_logins(db: AsyncSession, user: User) -> None:
     """Reset failed login counter and unlock on successful login."""
     user.failed_login_attempts = 0
     user.locked_until = None
+    await db.flush()
 
 
 async def update_user_name(db: AsyncSession, user: User, first_name: str, last_name: str) -> None:
     """Update the user's first and last name."""
     user.first_name = first_name
     user.last_name = last_name
+    await db.flush()
 
 
 async def update_user_password(db: AsyncSession, user: User, hashed_password: str) -> None:
     """Update the user's hashed password."""
     user.hashed_password = hashed_password
+    await db.flush()
 
 
 async def bump_token_version(db: AsyncSession, user: User) -> None:
@@ -135,8 +140,10 @@ async def bump_token_version(db: AsyncSession, user: User) -> None:
     this value costs zero extra DB queries per request.
     """
     user.token_version = (user.token_version or 0) + 1
+    await db.flush()
 
 
 async def delete_user(db: AsyncSession, user: User) -> None:
     """Delete a user and all associated data (cascade handles documents and sessions)."""
     await db.delete(user)
+    await db.flush()
