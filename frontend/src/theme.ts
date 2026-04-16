@@ -42,14 +42,19 @@ const theme = createTheme({
   },
   components: {
     MuiButton: {
+      variants: [
+        {
+          props: { variant: 'contained', color: 'primary' },
+          style: {
+            color: '#202124',
+            fontWeight: 600,
+          },
+        },
+      ],
       styleOverrides: {
         root: {
           borderRadius: 8,
           padding: '8px 24px',
-        },
-        containedPrimary: {
-          color: '#202124',
-          fontWeight: 600,
         },
       },
     },
