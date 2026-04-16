@@ -51,9 +51,9 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
     except Exception:  # noqa: BLE001 — pikepdf raises undocumented C-level exceptions
         return
 
-    for name in list(images.keys()):
+    for name, raw_image in images.items():
         try:
-            pdf_image: PdfImage = images[name]  # ty: ignore
+            pdf_image = PdfImage(raw_image)
             raw_stream: Stream = pdf_image.obj
 
             if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
