@@ -22,20 +22,20 @@ class TestCompressParams:
 
     @pytest.mark.parametrize("level", [1, 2, 3])
     def test_valid_levels(self, level: int):
-        params = CompressParams(level=level)  # type: ignore[arg-type]
+        params = CompressParams(level=level)  # type: ignore[arg-type] # ty: ignore
         assert params.level == level
 
     def test_level_0_rejected(self):
         with pytest.raises(ValidationError):
-            CompressParams(level=0)  # type: ignore[arg-type]
+            CompressParams(level=0)  # type: ignore[arg-type] # ty: ignore
 
     def test_level_4_rejected(self):
         with pytest.raises(ValidationError):
-            CompressParams(level=4)  # type: ignore[arg-type]
+            CompressParams(level=4)  # type: ignore[arg-type] # ty: ignore
 
     def test_string_rejected(self):
         with pytest.raises(ValidationError):
-            CompressParams(level="high")  # type: ignore[arg-type]
+            CompressParams(level="high")  # type: ignore[arg-type] # ty: ignore
 
 
 # ── SplitParams ──────────────────────────────────────────────────────────────
