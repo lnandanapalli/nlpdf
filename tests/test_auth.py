@@ -663,7 +663,7 @@ class TestForgotPassword:
             json={
                 "email": email,
                 "otp_code": FIXED_OTP,
-                "new_password": "brandnewpass456",  # pragma: allowlist secret
+                "new_password": "brandnewpass456",
                 "cf_token": CF_TOKEN,
             },
         )
