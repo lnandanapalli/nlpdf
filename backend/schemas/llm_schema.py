@@ -84,7 +84,7 @@ def validate_llm_json(
 
     model_class = OPERATION_MAP[operation]
     try:
-        return model_class(**llm_output)  # type: ignore[return-value]
+        return model_class(**llm_output)  # type: ignore[return-value] # ty: ignore
     except ValidationError as e:
         raise ValueError(f"Invalid parameters for '{operation}': {e}") from e
 

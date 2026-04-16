@@ -79,4 +79,4 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()  # type: ignore[call-arg]
+settings = Settings()  # type: ignore[call-arg] # ty: ignore
