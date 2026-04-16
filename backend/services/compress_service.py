@@ -53,8 +53,8 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
 
     for name in list(images.keys()):
         try:
-            raw_stream: Stream = images[name]  # type: ignore[assignment]
-            pdf_image = PdfImage(raw_stream)
+            pdf_image: PdfImage = images[name]  # ty: ignore
+            raw_stream: Stream = pdf_image.obj
 
             if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
                 continue
