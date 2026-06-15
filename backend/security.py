@@ -222,7 +222,6 @@ class CleanupFileResponse(FileResponse):
         background: None = None,
         filename: str | None = None,
         stat_result: None = None,
-        method: str | None = None,
         content_disposition_type: str = "attachment",
     ) -> None:
         """Initialize with a list of paths to delete after completion."""
@@ -235,7 +234,6 @@ class CleanupFileResponse(FileResponse):
             background=background,
             filename=filename,
             stat_result=stat_result,
-            method=method,
             content_disposition_type=content_disposition_type,
         )
 
