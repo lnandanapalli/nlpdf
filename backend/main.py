@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.csrf import verify_csrf_token
 from backend.config import settings
 from backend.database import get_db
-from backend.logging import setup_logging
+from backend.logging import cleanup_old_log_files, get_log_dir, setup_logging
 from backend.rate_limit import limiter
 from backend.routers.auth_router import router as auth_router
 from backend.routers.llm_router import router as llm_router
@@ -80,6 +80,13 @@ async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
             _cleanup_old_uploads()
         except Exception:  # periodic background task — any failure must not crash the app
             logger.exception("periodic_cleanup_error")
+        try:
+            log_dir = get_log_dir(settings.APP_ENV)
+            removed = cleanup_old_log_files(log_dir)
+            if removed:
+                logger.info("periodic_log_cleanup", removed=removed)
+        except Exception:
+            logger.exception("periodic_log_cleanup_error")
         await _cleanup_expired_sessions()
 
 
@@ -87,6 +94,13 @@ async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application startup/shutdown lifecycle."""
     _cleanup_old_uploads()
+    try:
+        log_dir = get_log_dir(settings.APP_ENV)
+        removed = cleanup_old_log_files(log_dir)
+        if removed:
+            logger.info("startup_log_cleanup", removed=removed)
+    except Exception:
+        logger.exception("startup_log_cleanup_error")
     cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
     cleanup_task.cancel()

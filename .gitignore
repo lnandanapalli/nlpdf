@@ -30,3 +30,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 frontend/tsconfig.e2e.tsbuildinfo
+
+# Logs
+logs/
+*.log
+

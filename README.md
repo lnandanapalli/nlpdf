@@ -19,6 +19,7 @@ Upload PDFs and describe what you want in plain English. The system uses Llama 3
 - **PDF Operations** -Compress, split, merge, rotate, markdown-to-PDF (chainable and deterministic)
 - **Auth** -httpOnly cookie JWTs, refresh token rotation, email OTP, CSRF protection
 - **Security & Robustness** -File validation, CAPTCHA, rate limiting, Argon2id hashing, OOM protection for massive images, and safe Unicode chunked decoding for large files
+- **Persistent Logging** - Daily-rotated file logging with a hardcoded 30-day retention window. Uses persistent `/home/nlpdf_logs` in production and `./logs` in development, with startup and hourly cleanups to prune old logs.
 
 ## Tech Stack
 
