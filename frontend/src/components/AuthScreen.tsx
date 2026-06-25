@@ -5,6 +5,7 @@ import {
   Alert, Paper, InputAdornment, IconButton, Link, useTheme,
   Checkbox, FormControlLabel,
 } from '@mui/material';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import { Mail, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -198,7 +199,28 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const currentStep = showOTP ? 'otp' : isForgotPassword ? (showResetForm ? 'reset' : 'forgot') : (isLogin ? 'login' : 'signup');
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100dvh', alignItems: 'center', justifyContent: 'center' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        minHeight: '100dvh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        p: 2,
+        pt: { xs: 8, sm: 2 },
+      }}
+    >
+      <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+        <Button
+          startIcon={<GitHubIcon fontSize="small" />}
+          sx={{ color: 'text.secondary' }}
+          href="https://github.com/lnandanapalli/nlpdf"
+          target="_blank"
+          aria-label="View source on GitHub"
+        >
+          GitHub
+        </Button>
+      </Box>
       <Container maxWidth="xs">
         <Paper elevation={4} sx={{ p: 4, borderRadius: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 3 }}>
