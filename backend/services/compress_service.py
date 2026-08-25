@@ -49,7 +49,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
     """Compress all images on a page."""
     try:
         images = page.images
-    except Exception:  # noqa: BLE001 — pikepdf raises undocumented C-level exceptions
+    except Exception:  # pikepdf raises undocumented C-level exceptions
         return
 
     for name, raw_image in images.items():
@@ -74,7 +74,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
             else:
                 _compress_to_jpeg(raw_stream, pdf_image, scale)
 
-        except Exception as e:  # noqa: BLE001 — per-image failures are non-fatal
+        except Exception as e:  # per-image failures are non-fatal
             logger.debug(
                 "Failed to compress image '%s': %s: %s",
                 name,

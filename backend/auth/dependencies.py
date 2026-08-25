@@ -51,7 +51,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         ) from None
-    except Exception:  # noqa: BLE001 — jwt.decode can raise undocumented exceptions
+    except Exception:  # jwt.decode can raise undocumented exceptions
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -88,5 +88,5 @@ def get_current_session_id(request: Request) -> int | None:
         payload = decode_access_token(token)
         sid = payload.get("sid")
         return int(sid) if sid is not None else None
-    except Exception:  # noqa: BLE001 — any decoding error should return None gracefully
+    except Exception:  # any decoding error should return None gracefully
         return None

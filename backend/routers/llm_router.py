@@ -239,6 +239,6 @@ def _extract_metadata(input_path: Path) -> dict[str, Any] | None:
             "page_count": len(reader.pages),
             "file_size_mb": round(input_path.stat().st_size / (1024 * 1024), 2),
         }
-    except Exception as e:  # noqa: BLE001 — any PDF read error is non-fatal here
+    except Exception as e:  # any PDF read error is non-fatal here
         logger.warning("Could not read PDF metadata: %s", e)
         return None

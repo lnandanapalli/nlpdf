@@ -212,7 +212,7 @@ class CleanupFileResponse(FileResponse):
     This prevents the L5 race condition where files could be deleted before delivery completes.
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
         path: str | Path,
         cleanup_paths: list[Path],

@@ -74,7 +74,7 @@ class LLMService:
             content = response.choices[0].message.content
             if content is None:
                 msg = "LLM returned empty content"
-                raise ValueError(msg)  # noqa: TRY301 — extracted is more confusing here
+                raise ValueError(msg)  # extracted is more confusing here
             return content.strip()
         except Exception as e:  # BLE001: LLM SDK + HTTP can raise many types;
             # we log+fall-back to OpenAI or raise 503, so the broad catch is intentional
@@ -110,7 +110,7 @@ class LLMService:
             content = resp.json()["choices"][0]["message"]["content"]
             if not content:
                 msg = "OpenAI returned empty content"
-                raise ValueError(msg)  # noqa: TRY301 — extracted is more confusing here
+                raise ValueError(msg)  # extracted is more confusing here
             logger.info("LLM response from OpenAI fallback")
             return content.strip()
         except Exception:  # BLE001 — httpx + OpenAI response errors are diverse
@@ -236,7 +236,7 @@ _llm_service: LLMService | None = None
 
 def get_llm_service() -> LLMService:
     """Dependency: return (and lazily create) the application LLM Service."""
-    global _llm_service  # noqa: PLW0603 — intentional module-level singleton
+    global _llm_service  # intentional module-level singleton
     if _llm_service is None:
         _llm_service = LLMService()
     return _llm_service

@@ -77,7 +77,7 @@ def setup_logging(log_level: int = logging.INFO) -> None:
         file_handler.setFormatter(logging.Formatter("%(message)s"))
         file_handler.suffix = "%Y-%m-%d"
         logging.getLogger().addHandler(file_handler)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         sys.stderr.write(
             f"WARNING: Could not configure file logging in {log_dir}: {e}. "
             "Falling back to console-only logging.\n"

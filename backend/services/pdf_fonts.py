@@ -17,7 +17,7 @@ def register_fonts() -> None:
 
     Safe to call multiple times — registration only happens once.
     """
-    global _registered  # noqa: PLW0603
+    global _registered
     if _registered:
         return
 
