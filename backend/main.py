@@ -9,9 +9,15 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-# Workaround for ConnectionResetError on Windows with ProactorEventLoop
-if sys.platform == "win32":  # pragma: no cover
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# Workaround for ConnectionResetError on Windows with ProactorEventLoop.
+# Dev-only: production runs Linux. The policy API is deprecated in 3.14 and
+# removed in 3.16, so the guard stops a future interpreter failing at import.
+if sys.platform == "win32" and sys.version_info < (3, 16):  # pragma: no cover
+    # No non-policy replacement exists while uvicorn owns the loop, so the
+    # deprecation is suppressed rather than worked around; the version guard
+    # above is what protects against its removal.
+    _selector_policy = asyncio.WindowsSelectorEventLoopPolicy()
+    asyncio.set_event_loop_policy(_selector_policy)  # ty: ignore[deprecated]
 
 import structlog
 from fastapi import Depends, FastAPI, Request, Response

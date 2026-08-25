@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 
 from fastapi import HTTPException, status
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 import structlog
@@ -57,6 +58,12 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         try:
             yield session
             await session.commit()
+        except RequestValidationError:
+            # Client sent a malformed body: not a server fault. The exception
+            # repr embeds the raw request body, which on auth routes includes
+            # the submitted password, so this must never reach the logs.
+            await session.rollback()
+            raise
         except HTTPException as e:
             await session.rollback()
             # 4xx errors are "user errors" or expected logic — don't log tracebacks
