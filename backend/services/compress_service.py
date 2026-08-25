@@ -2,6 +2,7 @@
 
 import io
 from pathlib import Path
+from typing import cast
 
 import pikepdf
 from pikepdf import PdfImage, Stream
@@ -54,7 +55,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
     for name, raw_image in images.items():
         try:
             pdf_image = PdfImage(raw_image)
-            raw_stream: Stream = pdf_image.obj
+            raw_stream = cast("Stream", pdf_image.obj)
 
             if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
                 continue
