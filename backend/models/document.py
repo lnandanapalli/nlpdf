@@ -20,6 +20,10 @@ class Document(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
     # Ownership
+    # TODO: ondelete="CASCADE" is not in any migration, so the live database has a
+    # plain foreign key and `alembic check` reports drift. Deletes go through the
+    # ORM relationship cascade today, so nothing is broken, but a delete that
+    # bypasses the ORM would hit a constraint violation.
     owner_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
