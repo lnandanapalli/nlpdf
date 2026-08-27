@@ -15,9 +15,8 @@ class TestCredentialsNeverEscape:
     """A rejected auth request must not leak the submitted password anywhere.
 
     Body validation fails before cf_token is checked, so the exception carries
-    the whole request body. It used to reach two places: the log, via
-    logger.exception() in get_db, and the 422 response body, via FastAPI's
-    default handler serialising `input` verbatim.
+    the whole request body. Both sinks it can reach are covered here: the log,
+    and the 422 response returned to the client.
     """
 
     async def test_password_never_reaches_the_log(self, client, captured_logs):

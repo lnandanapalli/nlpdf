@@ -48,9 +48,8 @@ def compress_pdf(input_path: Path, output_path: Path, level: int) -> Path:
 def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
     """Compress all images on a page."""
     try:
-        # recursive=False matches the deprecated `page.images` exactly: images
-        # referenced directly by this page, not those nested in form XObjects.
-        # Widening that would be a behaviour change, not a deprecation fix.
+        # Only images referenced directly by the page, not those nested inside
+        # form XObjects.
         images = page.get_images(recursive=False)
     except Exception:  # pikepdf raises undocumented C-level exceptions
         return

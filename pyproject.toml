@@ -57,11 +57,8 @@ pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-# SQLAlchemy's asyncio layer bridges sync and async through greenlets, and
-# coverage cannot follow execution into a greenlet unless told to. Without
-# this, endpoint bodies that await the database are reported as unexecuted
-# even when the test provably runs them -- auth_router measured 49% instead
-# of its real 81%.
+# SQLAlchemy's asyncio layer runs through greenlets, which coverage cannot
+# trace into unless told to.
 concurrency = ["greenlet", "thread"]
 
 [tool.ruff]
@@ -70,10 +67,8 @@ line-length = 100
 exclude = ["migrations", ".venv", ".git", "alembic"]
 
 [tool.ruff.lint]
-# Explicit rule selection - deliberately NOT "ALL".
-# With "ALL", every ruff release auto-enables newly stabilised rules, so a
-# routine dependency bump breaks CI on code that never changed. Enabling a
-# family here is an intentional decision, reviewed like any other change.
+# Rules are selected explicitly rather than with "ALL", which opts in to
+# every rule ruff adds in future releases.
 select = [
     # --- Core correctness ---
     "F",         # pyflakes - undefined names, unused imports
@@ -108,9 +103,8 @@ select = [
     "ANN",       # require annotations
 ]
 
-# Deliberately not selected: PLR/PLW/PLC and C90 (arbitrary numeric thresholds
-# that shift between releases), plus TRY/EM/FBT/BLE/COM/ERA/TD (style opinions).
-# These caused the recurring upgrade breakages without catching real defects.
+# Not selected: PLR/PLW/PLC and C90, whose numeric thresholds shift between
+# releases, and TRY/EM/FBT/BLE/COM/ERA/TD, which are style opinions.
 
 ignore = [
     # --- Formatting is Black's job ---
@@ -166,9 +160,6 @@ skips = ["B110"]  # try/except/pass — intentional in logout (documented)
 # user_agents has no py.typed marker; the runtime import is fine.
 unresolved-import = "ignore"
 
-# ty runs on two platforms here (Windows dev, Linux CI). A suppression that is
-# required on one is necessarily unused on the other -- the Windows-only event
-# loop policy call in backend/main.py is flagged as deprecated on Windows and
-# not resolved at all on Linux. Enforcing this rule would mean CI failing on
-# code that never changed, which is the exact trap `select = ["ALL"]` created.
+# This runs on Windows and Linux. A suppression inside a platform-guarded
+# branch is necessarily unused on the other platform.
 unused-ignore-comment = "ignore"
