@@ -861,3 +861,95 @@ class TestCSRF:
             headers={"X-CSRF-Token": token},
         )
         assert resp.status_code == 200
+
+
+class TestSessions:
+    """Tests for the session management endpoints.
+
+    These back the 'log out my other devices' flow, so a failure here means a
+    user cannot revoke access from a device they no longer control.
+    """
+
+    async def test_list_sessions_returns_the_current_one(self, client):
+        await _create_verified_user_and_get_cookies(client, "sess@example.com", "securepass123")
+
+        resp = await client.get("/auth/sessions")
+
+        assert resp.status_code == 200
+        sessions = resp.json()
+        assert len(sessions) == 1
+        assert sessions[0]["is_current"] is True
+
+    async def test_list_sessions_requires_authentication(self, client):
+        fresh = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with fresh as anon:
+            assert (await anon.get("/auth/sessions")).status_code == 401
+
+    async def test_second_login_adds_a_session(self, client):
+        await _create_verified_user_and_get_cookies(client, "two@example.com", "securepass123")
+        other = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with other as second_device:
+            await second_device.post(
+                "/auth/login",
+                json={
+                    "email": "two@example.com",
+                    "password": "securepass123",
+                    "cf_token": CF_TOKEN,
+                },
+            )
+            listed = (await second_device.get("/auth/sessions")).json()
+
+        assert len(listed) == 2
+        assert sum(1 for s in listed if s["is_current"]) == 1
+
+    async def test_terminate_another_session(self, client):
+        await _create_verified_user_and_get_cookies(client, "term@example.com", "securepass123")
+        other = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with other as second_device:
+            await second_device.post(
+                "/auth/login",
+                json={
+                    "email": "term@example.com",
+                    "password": "securepass123",
+                    "cf_token": CF_TOKEN,
+                },
+            )
+
+        sessions = (await client.get("/auth/sessions")).json()
+        victim = next(s for s in sessions if not s["is_current"])
+
+        resp = await client.delete(f"/auth/sessions/{victim['id']}")
+        assert resp.status_code == 200
+
+        remaining = (await client.get("/auth/sessions")).json()
+        assert victim["id"] not in [s["id"] for s in remaining]
+
+    async def test_logout_all_revokes_other_devices_but_keeps_the_caller(self, client):
+        """logout-all re-issues tokens for the calling device by design.
+
+        It revokes every session and bumps token_version, then logs this device
+        straight back in -- hence "all *other* sessions". The caller staying
+        signed in is the contract, not a leak.
+        """
+        await _create_verified_user_and_get_cookies(client, "all@example.com", "securepass123")
+        other = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with other as second_device:
+            await second_device.post(
+                "/auth/login",
+                json={
+                    "email": "all@example.com",
+                    "password": "securepass123",
+                    "cf_token": CF_TOKEN,
+                },
+            )
+            assert (await second_device.get("/auth/me")).status_code == 200
+
+            resp = await client.post("/auth/sessions/logout-all")
+            assert resp.status_code == 200
+
+            # The other device's access token is invalidated by the version bump.
+            assert (await second_device.get("/auth/me")).status_code == 401
+
+        # The caller is still signed in, holding the only remaining session.
+        assert (await client.get("/auth/me")).status_code == 200
+        assert len((await client.get("/auth/sessions")).json()) == 1
