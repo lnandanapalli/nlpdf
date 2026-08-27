@@ -1,18 +1,5 @@
 """Tests for the main app endpoints (root and health)."""
 
-from httpx import ASGITransport, AsyncClient
-import pytest
-
-from backend.main import app as main_app
-
-
-@pytest.fixture
-async def client():
-    """Async test client for the main app."""
-    transport = ASGITransport(app=main_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
 
 class TestRootAndHealth:
     """Tests for / and /health endpoints."""

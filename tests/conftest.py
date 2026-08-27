@@ -1,7 +1,10 @@
 """Shared pytest fixtures for the NLPDF test suite."""
 
+import io
+import logging
 from pathlib import Path
 
+from httpx import ASGITransport, AsyncClient
 from pypdf import PdfWriter
 import pytest
 
@@ -52,3 +55,35 @@ async def setup_db():
 def pdf_bytes(small_pdf: Path) -> bytes:
     """Return raw bytes of a valid single-page PDF."""
     return small_pdf.read_bytes()
+
+
+@pytest.fixture
+async def client():
+    """Async test client bound to the real application."""
+    from backend.main import app as main_app
+
+    transport = ASGITransport(app=main_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest.fixture
+def captured_logs():
+    """Capture everything written to the root logger, tracebacks included.
+
+    Asserting against real emitted text rather than a patched logger means the
+    check still holds if logging moves to another module or another sink.
+    """
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.setLevel(logging.DEBUG)
+    root = logging.getLogger()
+    previous_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    try:
+        yield stream
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(previous_level)

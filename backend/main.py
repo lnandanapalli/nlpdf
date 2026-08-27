@@ -21,6 +21,8 @@ if sys.platform == "win32" and sys.version_info < (3, 16):  # pragma: no cover
 
 import structlog
 from fastapi import Depends, FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -126,6 +128,34 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
     max_age=600,
 )
+
+
+# Keys in a pydantic error dict that echo back what the client sent. `input` is
+# the offending value -- for a missing field, the entire request body -- and
+# `ctx` can carry it too. `type`, `loc` and `msg` are what a client acts on.
+_ECHOED_ERROR_KEYS = frozenset({"input", "ctx"})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> Response:
+    """Return a 422 without echoing the values that failed validation.
+
+    FastAPI's default handler serialises exc.errors() verbatim, so a missing
+    field on /auth/login returns the whole submitted body -- including the
+    plaintext password -- to the client, and onward to any proxy, CDN or
+    browser error reporter that records response bodies.
+    """
+    detail = [
+        {key: value for key, value in error.items() if key not in _ECHOED_ERROR_KEYS}
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"detail": jsonable_encoder(detail)},
+    )
 
 
 @app.exception_handler(RateLimitExceeded)
