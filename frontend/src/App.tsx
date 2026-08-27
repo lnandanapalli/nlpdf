@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AuthScreen from './components/AuthScreen';
 import AppShell from './components/AppShell';
 import HomePage from './components/HomePage';
+import DocumentHistory from './components/DocumentHistory';
 import SettingsLayout from './components/settings/SettingsLayout';
 import ProfileSettings from './components/settings/ProfileSettings';
 import SecuritySettings from './components/settings/SecuritySettings';
@@ -79,6 +80,7 @@ function App() {
           <>
             <Route element={<AppShell onLogout={handleLogout} />}>
               <Route index element={<HomePage />} />
+              <Route path="history" element={<DocumentHistory />} />
               <Route path="settings" element={<SettingsLayout />}>
                 <Route index element={<Navigate to="profile" replace />} />
                 <Route path="profile" element={<ProfileSettings />} />

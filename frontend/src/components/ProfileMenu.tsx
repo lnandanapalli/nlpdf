@@ -4,7 +4,7 @@ import {
   IconButton, Menu, MenuItem, ListItemIcon, ListItemText,
   Avatar, Typography, Divider, Box,
 } from '@mui/material';
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, History } from 'lucide-react';
 import { fetchCurrentUser, type UserData } from '../services/api';
 
 interface ProfileMenuProps {
@@ -77,6 +77,10 @@ export default function ProfileMenu({ onLogout }: ProfileMenuProps) {
           )}
         </Box>
         <Divider />
+        <MenuItem onClick={() => navigate('/history')}>
+          <ListItemIcon><History size={18} /></ListItemIcon>
+          <ListItemText>History</ListItemText>
+        </MenuItem>
         <MenuItem onClick={() => navigate('/settings')}>
           <ListItemIcon><Settings size={18} /></ListItemIcon>
           <ListItemText>Settings</ListItemText>

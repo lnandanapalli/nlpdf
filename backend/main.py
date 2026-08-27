@@ -35,6 +35,7 @@ from backend.database import get_db
 from backend.logging import cleanup_old_log_files, get_log_dir, setup_logging
 from backend.rate_limit import limiter
 from backend.routers.auth_router import router as auth_router
+from backend.routers.document_router import router as document_router
 from backend.routers.llm_router import router as llm_router
 from backend.crud.session_crud import delete_expired_sessions
 from backend.database import AsyncSessionLocal
@@ -226,6 +227,7 @@ async def security_headers_middleware(
 
 app.include_router(llm_router)
 app.include_router(auth_router)
+app.include_router(document_router)
 
 
 @app.get("/")

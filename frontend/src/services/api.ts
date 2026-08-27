@@ -228,3 +228,36 @@ export const processPDFs = async (
 
   return { blob: response.data, filename };
 };
+
+// ---------- Document history ----------
+
+export interface DocumentRecord {
+  id: number;
+  original_filename: string;
+  operation_type: string;
+  input_size_mb: string | null;
+  output_size_mb: string | null;
+  page_count: number | null;
+  created_at: string | null;
+}
+
+export interface DocumentPage {
+  items: DocumentRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchDocuments(limit = 20, offset = 0): Promise<DocumentPage> {
+  const res = await api.get<DocumentPage>('/documents', { params: { limit, offset } });
+  return res.data;
+}
+
+export async function deleteDocument(documentId: number): Promise<void> {
+  await api.delete(`/documents/${documentId}`);
+}
+
+export async function clearDocuments(): Promise<number> {
+  const res = await api.delete<{ message: string; deleted: number }>('/documents');
+  return res.data.deleted;
+}
