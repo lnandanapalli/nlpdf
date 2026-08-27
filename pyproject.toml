@@ -157,3 +157,10 @@ skips = ["B110"]  # try/except/pass — intentional in logout (documented)
 [tool.ty.rules]
 # user_agents has no py.typed marker; the runtime import is fine.
 unresolved-import = "ignore"
+
+# ty runs on two platforms here (Windows dev, Linux CI). A suppression that is
+# required on one is necessarily unused on the other -- the Windows-only event
+# loop policy call in backend/main.py is flagged as deprecated on Windows and
+# not resolved at all on Linux. Enforcing this rule would mean CI failing on
+# code that never changed, which is the exact trap `select = ["ALL"]` created.
+unused-ignore-comment = "ignore"
