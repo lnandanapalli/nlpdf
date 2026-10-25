@@ -224,7 +224,7 @@ async def process_with_llm(
         raise
     except Exception:
         cleanup_files(*temps)
-        logger.exception("Processing failed")
+        logger.exception("pdf_processing_failed")
         raise HTTPException(
             status_code=500,
             detail="Something went wrong while processing your request. Please try again.",
@@ -240,5 +240,5 @@ def _extract_metadata(input_path: Path) -> dict[str, Any] | None:
             "file_size_mb": round(input_path.stat().st_size / (1024 * 1024), 2),
         }
     except Exception as e:  # any PDF read error is non-fatal here
-        logger.warning("Could not read PDF metadata: %s", e)
+        logger.warning("pdf_metadata_unreadable", error=str(e))
         return None

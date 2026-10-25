@@ -174,3 +174,81 @@ class TestCompressPdfEdgeCases:
         # Should not raise, just skip the tiny image
         compress_pdf(input_path, output_path, level=3)
         assert output_path.exists()
+
+
+def _make_pdf_with_masked_image(path: Path, mask: str) -> Path:
+    """Create a PDF with a noisy FlateDecode RGB image carrying transparency.
+
+    mask="smask" attaches an alpha channel; mask="colorkey" marks one exact
+    colour as transparent.
+    """
+    import os
+    import zlib
+
+    size = 300
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+
+    # Random pixels compress badly with Flate, so JPEG will be smaller.
+    image_stream = pikepdf.Stream(pdf, zlib.compress(os.urandom(size * size * 3)))
+    image_stream["/Type"] = pikepdf.Name.XObject
+    image_stream["/Subtype"] = pikepdf.Name.Image
+    image_stream["/Width"] = size
+    image_stream["/Height"] = size
+    image_stream["/ColorSpace"] = pikepdf.Name.DeviceRGB
+    image_stream["/BitsPerComponent"] = 8
+    image_stream["/Filter"] = pikepdf.Name.FlateDecode
+
+    if mask == "smask":
+        alpha = pikepdf.Stream(pdf, zlib.compress(bytes(size * size)))
+        alpha["/Type"] = pikepdf.Name.XObject
+        alpha["/Subtype"] = pikepdf.Name.Image
+        alpha["/Width"] = size
+        alpha["/Height"] = size
+        alpha["/ColorSpace"] = pikepdf.Name.DeviceGray
+        alpha["/BitsPerComponent"] = 8
+        alpha["/Filter"] = pikepdf.Name.FlateDecode
+        image_stream["/SMask"] = pdf.make_indirect(alpha)
+    else:
+        image_stream["/Mask"] = pikepdf.Array([255, 255, 255, 255, 255, 255])
+
+    page = pdf.pages[0]
+    page["/Resources"] = pikepdf.Dictionary(
+        {"/XObject": pikepdf.Dictionary({"/Im0": pdf.make_indirect(image_stream)})}
+    )
+    content = b"q 300 0 0 300 100 400 cm /Im0 Do Q"
+    page["/Contents"] = pdf.make_indirect(pikepdf.Stream(pdf, content))
+    pdf.save(path)
+    return path
+
+
+def _first_image_info(path: Path) -> tuple[object, set[str]]:
+    """Return the first image's /Filter and its dictionary keys."""
+    with pikepdf.open(path) as pdf:
+        image = next(iter(pdf.pages[0].get_images(recursive=False).values()))
+        return image.get("/Filter"), set(image.keys())
+
+
+class TestCompressKeepsTransparency:
+    """Recompressing an image must not drop its transparency."""
+
+    def test_soft_mask_survives(self, tmp_path):
+        input_path = _make_pdf_with_masked_image(tmp_path / "input.pdf", mask="smask")
+        output_path = tmp_path / "compressed.pdf"
+
+        compress_pdf(input_path, output_path, level=2)
+
+        image_filter, keys = _first_image_info(output_path)
+        assert image_filter == pikepdf.Name.DCTDecode  # it was recompressed
+        assert "/SMask" in keys
+
+    def test_color_key_masked_image_is_left_alone(self, tmp_path):
+        """Lossy JPEG would shift the exact colour the mask keys on."""
+        input_path = _make_pdf_with_masked_image(tmp_path / "input.pdf", mask="colorkey")
+        output_path = tmp_path / "compressed.pdf"
+
+        compress_pdf(input_path, output_path, level=2)
+
+        image_filter, keys = _first_image_info(output_path)
+        assert image_filter == pikepdf.Name.FlateDecode
+        assert "/Mask" in keys

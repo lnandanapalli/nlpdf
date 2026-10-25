@@ -35,9 +35,9 @@ class LLMService:
     ) -> str:
         """Single LLM API call.
 
-        Tries HuggingFace first; falls back to OpenAI
-        only if HuggingFace returns a 429 rate-limit error and OPENAI_API_KEY
-        is configured. Returns raw text response.
+        Tries HuggingFace first; if that call fails for any reason (rate
+        limit, timeout, outage, empty reply) and OPENAI_API_KEY is configured,
+        falls back to OpenAI. Returns raw text response.
 
         Raises:
             HTTPException: If all available providers fail.
@@ -79,9 +79,9 @@ class LLMService:
         except Exception as e:  # BLE001: LLM SDK + HTTP can raise many types;
             # we log+fall-back to OpenAI or raise 503, so the broad catch is intentional
             if settings.OPENAI_API_KEY:
-                logger.warning("HuggingFace failed (%s). Falling back to OpenAI.", e)
+                logger.warning("llm_fallback_to_openai", error_type=type(e).__name__, error=str(e))
                 return await self._call_openai(messages)
-            logger.exception("LLM API call failed")
+            logger.exception("llm_call_failed")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="LLM service unavailable. Please try again later.",
@@ -111,10 +111,10 @@ class LLMService:
             if not content:
                 msg = "OpenAI returned empty content"
                 raise ValueError(msg)  # extracted is more confusing here
-            logger.info("LLM response from OpenAI fallback")
+            logger.info("llm_openai_fallback_succeeded")
             return content.strip()
         except Exception:  # BLE001 — httpx + OpenAI response errors are diverse
-            logger.exception("OpenAI fallback failed")
+            logger.exception("llm_openai_fallback_failed")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="LLM service unavailable. Please try again later.",
@@ -142,7 +142,7 @@ class LLMService:
         for attempt in range(1, max_retries + 1):
             # Step 1: Call LLM
             raw = await self._call_llm(user_message, pdf_metadata, retry_context)
-            logger.info("LLM attempt %d/%d raw: %s", attempt, max_retries, raw)
+            logger.info("llm_raw_response", attempt=attempt, max_retries=max_retries, raw=raw)
 
             # Step 2: Parse JSON
             cleaned = _extract_json(raw)
@@ -150,7 +150,7 @@ class LLMService:
 
             if parsed is None:
                 retry_context = f"Response was not valid JSON: {cleaned!r}"
-                logger.warning("Attempt %d: %s", attempt, retry_context)
+                logger.warning("llm_invalid_response", attempt=attempt, issue=retry_context)
                 await asyncio.sleep(settings.LLM_RETRY_DELAY)
                 continue
 
@@ -160,7 +160,13 @@ class LLMService:
 
             if not isinstance(parsed, list):
                 retry_context = "Response must be a JSON array of operations"
-                logger.warning("Attempt %d: %s", attempt, retry_context)
+                logger.warning("llm_invalid_response", attempt=attempt, issue=retry_context)
+                await asyncio.sleep(settings.LLM_RETRY_DELAY)
+                continue
+
+            if not all(isinstance(item, dict) for item in parsed):
+                retry_context = "Each operation must be a JSON object"
+                logger.warning("llm_invalid_response", attempt=attempt, issue=retry_context)
                 await asyncio.sleep(settings.LLM_RETRY_DELAY)
                 continue
 
@@ -179,19 +185,15 @@ class LLMService:
                 operations = validate_llm_json_list(parsed)
             except ValueError as e:
                 retry_context = str(e)
-                logger.warning("Attempt %d: %s", attempt, retry_context)
+                logger.warning("llm_invalid_response", attempt=attempt, issue=retry_context)
                 await asyncio.sleep(settings.LLM_RETRY_DELAY)
                 continue
 
             op_names = [op.operation for op in operations]
-            logger.info("Validated operations: %s", op_names)
+            logger.info("llm_operations_validated", operations=op_names)
             return operations
 
-        logger.error(
-            "LLM failed after %d attempts. Last issue: %s",
-            max_retries,
-            retry_context,
-        )
+        logger.error("llm_retries_exhausted", attempts=max_retries, last_issue=retry_context)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not understand your request. " "Please try rephrasing your instruction.",

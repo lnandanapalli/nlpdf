@@ -36,7 +36,8 @@ return: [{"error": "invalid_operation"}]
 
 **Multi-file behavior:**
 - compress and markdown_to_pdf apply to EACH file (results ZIP).
-- split and rotate use only the first file.
+- split and rotate need exactly ONE PDF. With multiple files they are only \
+valid after a merge, and add a merge ONLY if the user asked to combine.
 - Use merge ONLY when user explicitly wants to combine files.
 
 **Response rules:**

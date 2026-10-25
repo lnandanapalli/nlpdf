@@ -64,7 +64,7 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
 
             if (pdf_image.width * pdf_image.height) > MAX_IMAGE_PIXELS:
                 logger.warning(
-                    "Skipping massive image to prevent OOM",
+                    "image_too_large_skipped",
                     width=pdf_image.width,
                     height=pdf_image.height,
                 )
@@ -78,10 +78,10 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
 
         except Exception as e:  # per-image failures are non-fatal
             logger.debug(
-                "Failed to compress image '%s': %s: %s",
-                name,
-                type(e).__name__,
-                e,
+                "image_compress_failed",
+                image=str(name),
+                error_type=type(e).__name__,
+                error=str(e),
             )
             continue
 
@@ -103,14 +103,25 @@ def _recompress_jpeg(raw_stream: Stream, pdf_image: PdfImage, scale: float) -> N
     if len(jpeg_data) >= original_size:
         return
 
-    logger.debug("JPEG recompressed: %d -> %d bytes", original_size, len(jpeg_data))
+    logger.debug("jpeg_recompressed", before_bytes=original_size, after_bytes=len(jpeg_data))
     raw_stream.write(jpeg_data, filter=pikepdf.Name.DCTDecode)
     raw_stream.Width = new_w
     raw_stream.Height = new_h
 
 
 def _compress_to_jpeg(raw_stream: Stream, pdf_image: PdfImage, scale: float) -> None:
-    """Compress a non-JPEG image to JPEG."""
+    """Compress a non-JPEG image to JPEG.
+
+    Transparency is kept: an /SMask (alpha channel) or stencil /Mask is a
+    separate image whose size need not match this one, so it stays attached
+    to the recompressed image unchanged. pikepdf folds an /SMask into the
+    pixels it returns (RGBA/LA), so only the colour channels are encoded
+    here. A colour-key /Mask instead lists exact pixel values to treat as
+    transparent, which lossy JPEG would shift, so such images are left alone.
+    """
+    if isinstance(raw_stream.get("/Mask"), pikepdf.Array):
+        return
+
     pil_image = pdf_image.as_pil_image()
 
     if pil_image.mode not in ("RGB", "L", "LA", "RGBA"):
@@ -132,9 +143,9 @@ def _compress_to_jpeg(raw_stream: Stream, pdf_image: PdfImage, scale: float) -> 
     if len(jpeg_data) >= original_size:
         return
 
-    logger.debug("Converted to JPEG: %d -> %d bytes", original_size, len(jpeg_data))
+    logger.debug("converted_to_jpeg", before_bytes=original_size, after_bytes=len(jpeg_data))
 
-    for old_key in ["/DecodeParms", "/Decode", "/SMask", "/Mask"]:
+    for old_key in ["/DecodeParms", "/Decode"]:
         if old_key in raw_stream:
             del raw_stream[old_key]
 

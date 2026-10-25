@@ -4,11 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.auth.csrf import verify_csrf_token
+from backend.crud.user_crud import MAX_FAILED_LOGIN_ATTEMPTS, MAX_OTP_ATTEMPTS
 from backend.database import Base, get_db
+from backend.models.session import Session
 from backend.models.user import User
 from backend.routers.auth_router import router as auth_router
 
@@ -126,13 +128,20 @@ def _signup_payload(email, password, **overrides):
     }
 
 
+def _verify_payload(email, password, otp_code=FIXED_OTP):
+    """Build a verify_otp JSON payload."""
+    return {"email": email, "otp_code": otp_code, "password": password, "cf_token": CF_TOKEN}
+
+
+def _login_payload(email, password):
+    """Build a login JSON payload."""
+    return {"email": email, "password": password, "cf_token": CF_TOKEN}
+
+
 async def _create_verified_user_and_get_cookies(client, email, password):
     """Helper: signup, verify OTP, return cookies dict from verify_otp response."""
     await client.post("/auth/signup", json=_signup_payload(email, password))
-    resp = await client.post(
-        "/auth/verify_otp",
-        json={"email": email, "otp_code": FIXED_OTP, "cf_token": CF_TOKEN},
-    )
+    resp = await client.post("/auth/verify_otp", json=_verify_payload(email, password))
     assert resp.status_code == 200
     cookies = _extract_cookies(resp)
     return cookies
@@ -199,10 +208,7 @@ class TestOTP:
         email = "otp@example.com"
         await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
-        resp = await client.post(
-            "/auth/verify_otp",
-            json={"email": email, "otp_code": FIXED_OTP, "cf_token": CF_TOKEN},
-        )
+        resp = await client.post("/auth/verify_otp", json=_verify_payload(email, "securepass123"))
         assert resp.status_code == 200
         cookies = _extract_cookies(resp)
         assert "access_token" in cookies
@@ -218,9 +224,95 @@ class TestOTP:
         await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
 
         resp = await client.post(
-            "/auth/verify_otp", json={"email": email, "otp_code": "000000", "cf_token": CF_TOKEN}
+            "/auth/verify_otp", json=_verify_payload(email, "securepass123", otp_code="000000")
         )
         assert resp.status_code == 401
+
+    async def test_verify_otp_requires_password(self, client):
+        email = "nopass@example.com"
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
+
+        resp = await client.post(
+            "/auth/verify_otp",
+            json={"email": email, "otp_code": FIXED_OTP, "cf_token": CF_TOKEN},
+        )
+        assert resp.status_code == 422
+
+    async def test_otp_attempt_limit_survives_the_error_response(self, client):
+        """Each wrong code must be counted even though the request fails.
+
+        get_db rolls back on exceptions, so the counter used to be discarded
+        along with the 401 and the limit was never reached.
+        """
+        email = "otplimit@example.com"
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
+
+        for _ in range(MAX_OTP_ATTEMPTS):
+            await client.post(
+                "/auth/verify_otp", json=_verify_payload(email, "securepass123", otp_code="000000")
+            )
+
+        async with TestSessionLocal() as db:
+            user = (await db.execute(select(User).where(User.email == email))).scalars().one()
+            assert user.otp_attempts == MAX_OTP_ATTEMPTS
+            assert user.otp_code is None
+
+        # Even the right code is refused now; a new one has to be requested.
+        resp = await client.post("/auth/verify_otp", json=_verify_payload(email, "securepass123"))
+        assert resp.status_code in (401, 429)
+        assert "access_token" not in _extract_cookies(resp)
+
+
+class TestPreRegistration:
+    """Someone signing up with an address they don't own must not get into it.
+
+    Before the fix the first signup's password stuck: an attacker pre-registered
+    victim@ with their own password, the owner verified the emailed code, and
+    the attacker could then log in to the owner's verified account.
+    """
+
+    async def test_attacker_password_does_not_survive_owner_verification(self, client):
+        email = "victim@example.com"
+        await client.post("/auth/signup", json=_signup_payload(email, "attacker-pass"))
+        await client.post("/auth/signup", json=_signup_payload(email, "owner-password"))
+
+        resp = await client.post("/auth/verify_otp", json=_verify_payload(email, "owner-password"))
+        assert resp.status_code == 200
+
+        fresh = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with fresh as other:
+            owner = await other.post("/auth/login", json=_login_payload(email, "owner-password"))
+            attacker = await other.post("/auth/login", json=_login_payload(email, "attacker-pass"))
+        assert owner.status_code == 200
+        assert attacker.status_code == 401
+
+    async def test_password_given_at_verification_wins(self, client):
+        """Even if the attacker signs up last, the code holder sets the password."""
+        email = "victim2@example.com"
+        await client.post("/auth/signup", json=_signup_payload(email, "owner-password"))
+        await client.post("/auth/signup", json=_signup_payload(email, "attacker-pass"))
+
+        resp = await client.post("/auth/verify_otp", json=_verify_payload(email, "owner-password"))
+        assert resp.status_code == 200
+
+        fresh = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with fresh as other:
+            attacker = await other.post("/auth/login", json=_login_payload(email, "attacker-pass"))
+            owner = await other.post("/auth/login", json=_login_payload(email, "owner-password"))
+        assert attacker.status_code == 401
+        assert owner.status_code == 200
+
+    async def test_resignup_replaces_names(self, client):
+        email = "renamed@example.com"
+        await client.post("/auth/signup", json=_signup_payload(email, "securepass123"))
+        await client.post(
+            "/auth/signup",
+            json=_signup_payload(email, "securepass123", first_name="Real", last_name="Owner"),
+        )
+
+        async with TestSessionLocal() as db:
+            user = (await db.execute(select(User).where(User.email == email))).scalars().one()
+            assert (user.first_name, user.last_name) == ("Real", "Owner")
 
     async def test_resend_otp_success(self, client):
         email = "resend@example.com"
@@ -286,6 +378,68 @@ class TestLogin:
         assert resp.status_code == 401
 
 
+class TestLockout:
+    """Repeated wrong passwords must lock the account.
+
+    The failed-login counter is written just before the 401 is raised, and
+    get_db rolls back on exceptions, so it used to be discarded every time.
+    """
+
+    async def _fail(self, client, email, times):
+        for _ in range(times):
+            resp = await client.post("/auth/login", json=_login_payload(email, "wrong-password"))
+            assert resp.status_code == 401
+
+    async def test_failed_logins_are_counted_and_lock_the_account(self, client):
+        email = "lock@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+
+        await self._fail(client, email, MAX_FAILED_LOGIN_ATTEMPTS)
+
+        async with TestSessionLocal() as db:
+            user = (await db.execute(select(User).where(User.email == email))).scalars().one()
+            assert user.failed_login_attempts == MAX_FAILED_LOGIN_ATTEMPTS
+            assert user.locked_until is not None
+
+        # The right password is refused while locked.
+        resp = await client.post("/auth/login", json=_login_payload(email, "securepass123"))
+        assert resp.status_code == 401
+        assert "access_token" not in _extract_cookies(resp)
+
+    async def test_locked_account_looks_like_an_unknown_email(self, client):
+        """A distinct 'locked' answer would confirm the address has an account."""
+        email = "lock2@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+        await self._fail(client, email, MAX_FAILED_LOGIN_ATTEMPTS)
+
+        locked = await client.post("/auth/login", json=_login_payload(email, "securepass123"))
+        unknown = await client.post(
+            "/auth/login", json=_login_payload("nobody@example.com", "securepass123")
+        )
+        assert locked.status_code == unknown.status_code == 401
+        assert locked.json() == unknown.json()
+
+    async def test_password_reset_lifts_the_lock(self, client):
+        email = "lock3@example.com"
+        await _create_verified_user_and_get_cookies(client, email, "securepass123")
+        await self._fail(client, email, MAX_FAILED_LOGIN_ATTEMPTS)
+
+        await client.post("/auth/forgot-password", json={"email": email, "cf_token": CF_TOKEN})
+        resp = await client.post(
+            "/auth/reset-password",
+            json={
+                "email": email,
+                "otp_code": FIXED_OTP,
+                "new_password": "brandnewpass1",  # pragma: allowlist secret
+                "cf_token": CF_TOKEN,
+            },
+        )
+        assert resp.status_code == 200
+
+        resp = await client.post("/auth/login", json=_login_payload(email, "brandnewpass1"))
+        assert resp.status_code == 200
+
+
 class TestMe:
     """Tests for GET /auth/me."""
 
@@ -326,6 +480,43 @@ class TestRefresh:
         # Body is a SuccessResponse
         data = resp.json()
         assert "message" in data
+
+    async def test_reused_refresh_token_revokes_every_session(self, client):
+        """Presenting an already-rotated refresh token signals theft."""
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "reuse@example.com", "securepass123"
+        )
+        assert (await client.post("/auth/refresh", json={})).status_code == 200
+
+        # Age the rotation past the grace window for concurrent tabs.
+        async with TestSessionLocal() as db:
+            await db.execute(
+                update(Session).values(last_used_at=datetime.now(UTC) - timedelta(minutes=5))
+            )
+            await db.commit()
+
+        fresh = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with fresh as thief:
+            thief.cookies.set("refresh_token", cookies["refresh_token"])
+            assert (await thief.post("/auth/refresh", json={})).status_code == 401
+
+        async with TestSessionLocal() as db:
+            remaining = (await db.execute(select(Session))).scalars().all()
+            assert remaining == []
+
+    async def test_concurrent_refresh_does_not_revoke_sessions(self, client):
+        """Two tabs refreshing at once must not log the user out everywhere."""
+        cookies = await _create_verified_user_and_get_cookies(
+            client, "tabs@example.com", "securepass123"
+        )
+        assert (await client.post("/auth/refresh", json={})).status_code == 200
+
+        fresh = AsyncClient(transport=ASGITransport(app=app_instance), base_url="http://test")
+        async with fresh as other_tab:
+            other_tab.cookies.set("refresh_token", cookies["refresh_token"])
+            assert (await other_tab.post("/auth/refresh", json={})).status_code == 401
+
+        assert (await client.post("/auth/refresh", json={})).status_code == 200
 
     async def test_refresh_without_cookie_returns_401(self, client):
         resp = await client.post("/auth/refresh", json={})
@@ -383,11 +574,11 @@ class TestLogout:
             if cookie_name in set_cookies:
                 assert set_cookies[cookie_name] in ('""', "", "null")
 
-        # Verify refresh token JTI is revoked in DB
+        # The session row is gone, so the device no longer shows as active
+        # and its refresh token can't be used again.
         async with TestSessionLocal() as db:
-            result = await db.execute(select(User).where(User.email == "logout@example.com"))
-            user = result.scalars().first()
-            assert user is not None
+            remaining = (await db.execute(select(Session))).scalars().all()
+            assert remaining == []
 
     async def test_logout_without_cookie_returns_401(self, client):
         resp = await client.post("/auth/logout")

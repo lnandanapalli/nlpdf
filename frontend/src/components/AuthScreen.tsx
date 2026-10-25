@@ -10,11 +10,13 @@ import { Mail, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   login as apiLogin, signup as apiSignup, verifyOtp, resendOtp, extractErrorMessage,
-  forgotPassword, resetPassword,
+  forgotPassword, resetPassword, isUnverifiedEmailError,
 } from '../services/api';
 import { config } from '../config';
 
 const TURNSTILE_SITE_KEY = config.turnstileSiteKey;
+const MIN_PASSWORD_LENGTH = 8;
+const PASSWORD_TOO_SHORT = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
 
 interface AuthScreenProps {
   onLogin: () => void;
@@ -38,6 +40,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [otpCode, setOtpCode] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showResetForm, setShowResetForm] = useState(false);
+  // Set when a correct password meets an unverified account at login.
+  const [needsVerification, setNeedsVerification] = useState(false);
   const turnstileRef = useRef<TurnstileInstance>(null);
   const theme = useTheme();
   const iconColor = theme.palette.text.secondary;
@@ -50,6 +54,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setNeedsVerification(false);
 
     if (!email || !password) {
       setError('Please fill in all fields');
@@ -57,6 +62,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
     if (!isLogin && (!firstName.trim() || !lastName.trim())) {
       setError('Please fill in all fields');
+      return;
+    }
+    if (!isLogin && password.length < MIN_PASSWORD_LENGTH) {
+      setError(PASSWORD_TOO_SHORT);
       return;
     }
     if (!isLogin && password !== confirmPassword) {
@@ -85,7 +94,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         turnstileRef.current?.reset();
       }
     } catch (err) {
-      handleError(err, 'An unexpected error occurred. Please try again.');
+      if (isLogin && isUnverifiedEmailError(err)) {
+        setNeedsVerification(true);
+      } else {
+        handleError(err, 'An unexpected error occurred. Please try again.');
+      }
       setCfToken('');
       turnstileRef.current?.reset();
     } finally {
@@ -102,7 +115,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     try {
-      await verifyOtp(email, otpCode, cfToken);
+      await verifyOtp(email, otpCode, password, cfToken);
       onLogin();
     } catch (err) {
       handleError(err, 'Verification failed. Please check the code and try again.');
@@ -127,6 +140,25 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
   };
 
+  // From the login screen: send a fresh code and move to the code form. The
+  // password just typed stays in state and is sent with the code.
+  const handleStartVerification = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await resendOtp(email);
+      setNeedsVerification(false);
+      setOtpCode('');
+      setShowOTP(true);
+      setSuccess('We sent a verification code to your email.');
+    } catch (err) {
+      handleError(err, 'Could not send a verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const switchMode = () => {
     setIsLogin(!isLogin);
     setIsForgotPassword(false);
@@ -136,6 +168,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     setShowOTP(false);
+    setNeedsVerification(false);
     setConfirmPassword('');
     setShowConfirmPassword(false);
     setAgreedToTerms(false);
@@ -169,6 +202,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const handleResetPassword = async (e: FormEvent) => {
     e.preventDefault();
     if (!otpCode || !password || !confirmPassword) { setError('Please fill in all fields'); return; }
+    if (password.length < MIN_PASSWORD_LENGTH) { setError(PASSWORD_TOO_SHORT); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     if (!cfToken) { setError('Please complete the CAPTCHA'); return; }
 
@@ -237,6 +271,19 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+          {needsVerification && !showOTP && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2, borderRadius: 2 }}
+              action={(
+                <Button color="inherit" size="small" onClick={handleStartVerification} disabled={loading}>
+                  Send code
+                </Button>
+              )}
+            >
+              Your email isn't verified yet. We'll email you a code to finish signing up.
+            </Alert>
+          )}
           {success && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{success}</Alert>}
 
           <Box sx={{ mb: 2 }}>
@@ -276,7 +323,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 <Box sx={{ mt: 1, textAlign: 'center' }}>
                   <Link
                     component="button" type="button" variant="body2" color="text.secondary"
-                    onClick={() => { setShowOTP(false); setIsLogin(true); setError(''); setSuccess(''); }}
+                    onClick={() => { setShowOTP(false); setIsLogin(true); setNeedsVerification(false); setError(''); setSuccess(''); }}
                   >
                     Back to Login
                   </Link>
@@ -409,6 +456,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   <TextField
                     fullWidth label="Password" type={showPassword ? 'text' : 'password'}
                     value={password} onChange={(e) => setPassword(e.target.value)}
+                    helperText={!isLogin ? `At least ${MIN_PASSWORD_LENGTH} characters` : undefined}
                     sx={{ mb: !isLogin ? 2 : 1 }}
                     slotProps={{
                       input: {

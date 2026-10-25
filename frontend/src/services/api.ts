@@ -8,6 +8,18 @@ const PDF_PROCESSING_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 // Shared axios instance with credentials (cookies sent automatically)
 const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
 
+// Endpoints whose 401 means "wrong credentials or code", not "session expired".
+// Refreshing on those would be a wasted request and would wrongly announce an
+// expired session on the login screen.
+const CREDENTIAL_ENDPOINTS = new Set([
+  '/auth/login',
+  '/auth/signup',
+  '/auth/verify_otp',
+  '/auth/resend_otp',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+]);
+
 let isRefreshing = false;
 let pendingRequests: Array<{
   resolve: () => void;
@@ -45,7 +57,7 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    if (error.response?.status !== 401 || original._retry) {
+    if (error.response?.status !== 401 || original._retry || CREDENTIAL_ENDPOINTS.has(original.url)) {
       return Promise.reject(error);
     }
 
@@ -166,8 +178,27 @@ export async function signup(
   });
 }
 
-export async function verifyOtp(email: string, otpCode: string, cfToken: string): Promise<void> {
-  await api.post('/auth/verify_otp', { email, otp_code: otpCode, cf_token: cfToken });
+// The password is sent again with the code: whoever holds the emailed code
+// sets the account's password, so an earlier signup by someone else can't.
+export async function verifyOtp(
+  email: string, otpCode: string, password: string, cfToken: string,
+): Promise<void> {
+  await api.post('/auth/verify_otp', {
+    email, otp_code: otpCode, password, cf_token: cfToken,
+  });
+}
+
+// Sent by /auth/login (403) only after the password was checked, so showing it
+// reveals nothing to someone who doesn't already know the password.
+const UNVERIFIED_EMAIL_DETAIL = 'Unverified email';
+
+export function isUnverifiedEmailError(err: unknown): boolean {
+  return (
+    axios.isAxiosError(err)
+    && err.response?.status === 403
+    && typeof err.response.data?.detail === 'string'
+    && err.response.data.detail.startsWith(UNVERIFIED_EMAIL_DETAIL)
+  );
 }
 
 export async function resendOtp(email: string): Promise<void> {
@@ -188,12 +219,75 @@ export async function resetPassword(
 
 // --- Error Handling ---
 
-export function extractErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err) && err.response?.data?.detail) {
-    const { detail } = err.response.data;
-    return typeof detail === 'string' ? detail : fallback;
+// Request fields the user can see, by the name the API uses for them.
+const FIELD_LABELS: Record<string, string> = {
+  email: 'Email',
+  password: 'Password',
+  new_password: 'New password',
+  current_password: 'Current password',
+  first_name: 'First name',
+  last_name: 'Last name',
+  otp_code: 'Verification code',
+  message: 'Instruction',
+  files: 'Files',
+};
+
+interface ValidationIssue {
+  type?: string;
+  loc?: (string | number)[];
+  msg?: string;
+}
+
+/**
+ * Turn one FastAPI 422 entry into a sentence about the field the user typed.
+ *
+ * Only the field name and the kind of problem are used, never echoed values
+ * (the backend strips them), and the result depends only on what this user
+ * submitted, so it can't reveal anything about other accounts.
+ */
+function describeValidationIssue(issue: ValidationIssue): string {
+  const field = String(issue.loc?.[issue.loc.length - 1] ?? '');
+  const label = FIELD_LABELS[field] ?? 'A field';
+  const limit = /(\d+)/.exec(issue.msg ?? '')?.[1];
+
+  switch (issue.type) {
+    case 'missing':
+      return `${label} is required.`;
+    case 'string_too_short':
+      return limit ? `${label} must be at least ${limit} characters.` : `${label} is too short.`;
+    case 'string_too_long':
+      return limit ? `${label} must be at most ${limit} characters.` : `${label} is too long.`;
+    case 'string_pattern_mismatch':
+      return field === 'otp_code' ? 'The code must be 6 digits.' : `${label} is not in the right format.`;
+    case 'value_error':
+      return field === 'email' ? 'Enter a valid email address.' : `${label} is invalid.`;
+    default:
+      return `${label} is invalid.`;
+  }
+}
+
+/**
+ * Turn an API error `detail` into text for the user.
+ *
+ * String details are written by the backend for users (and kept generic
+ * wherever detail could leak account state); list details are 422 field
+ * validation errors and are rewritten into plain sentences.
+ */
+export function formatErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const messages = [...new Set(detail.map((d) => describeValidationIssue(d as ValidationIssue)))];
+    return messages.join(' ');
   }
   return fallback;
+}
+
+export function extractErrorMessage(err: unknown, fallback: string): string {
+  if (!axios.isAxiosError(err)) return fallback;
+  if (!err.response) {
+    return "Can't reach the server. Check your connection and try again.";
+  }
+  return formatErrorDetail(err.response.data?.detail, fallback);
 }
 
 // --- PDF Processing ---
@@ -228,6 +322,33 @@ export const processPDFs = async (
 
   return { blob: response.data, filename };
 };
+
+// ---------- Sessions ----------
+
+export interface SessionRecord {
+  id: number;
+  ip_address: string | null;
+  device_name: string | null;
+  browser: string | null;
+  os: string | null;
+  is_mobile: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+  is_current: boolean;
+}
+
+export async function fetchSessions(): Promise<SessionRecord[]> {
+  const res = await api.get<SessionRecord[]>('/auth/sessions');
+  return res.data;
+}
+
+export async function terminateSession(sessionId: number): Promise<void> {
+  await api.delete(`/auth/sessions/${sessionId}`);
+}
+
+export async function logoutAllOtherSessions(): Promise<void> {
+  await api.post('/auth/sessions/logout-all');
+}
 
 // ---------- Document history ----------
 
