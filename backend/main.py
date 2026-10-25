@@ -86,7 +86,7 @@ async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
         except Exception:  # periodic background task — any failure must not crash the app
             logger.exception("periodic_cleanup_error")
         try:
-            log_dir = get_log_dir(settings.APP_ENV)
+            log_dir = get_log_dir(settings.APP_ENV, settings.LOG_DIR)
             removed = cleanup_old_log_files(log_dir)
             if removed:
                 logger.info("periodic_log_cleanup", removed=removed)
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application startup/shutdown lifecycle."""
     _cleanup_old_uploads()
     try:
-        log_dir = get_log_dir(settings.APP_ENV)
+        log_dir = get_log_dir(settings.APP_ENV, settings.LOG_DIR)
         removed = cleanup_old_log_files(log_dir)
         if removed:
             logger.info("startup_log_cleanup", removed=removed)

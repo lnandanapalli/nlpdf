@@ -109,6 +109,15 @@ docker build -t nlpdf .
 docker run -p 8000:8000 --env-file .env nlpdf
 ```
 
+The image is a two-stage build: dependencies (including pycairo, which has no
+Linux wheels) compile in a builder stage, and the final image holds only the
+virtualenv, the app and runtime libraries (ODBC Driver 18, cairo). It runs as
+a non-root user and logs to stdout. On Azure App Service that output is in
+Log stream, App Service logs and (via diagnostic settings) Log Analytics; set
+`LOG_DIR` only if you also want rotated log files, and point it somewhere
+persistent and writable (on App Service, under `/home` with
+`WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`).
+
 Packages the backend only. Frontend is deployed separately as static files.
 
 ## Testing

@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     ]
     REQUEST_TIMEOUT_SECONDS: int = 120
 
+    # Logging: a directory for daily-rotated log files. Unset means
+    # ./logs in development and stdout only in production.
+    LOG_DIR: str | None = None
+
     # Database
     DATABASE_URL_OVERRIDE: str | None = None
     DB_HOST: str = "localhost"
