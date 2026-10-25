@@ -3,11 +3,12 @@ import {
   Box, Container, List, ListItemButton, ListItemIcon, ListItemText,
   Paper, Typography, IconButton, useMediaQuery, useTheme, Link,
 } from '@mui/material';
-import { User, Shield, ArrowLeft } from 'lucide-react';
+import { User, Shield, MonitorSmartphone, ArrowLeft } from 'lucide-react';
 
 const sections = [
   { id: 'profile', label: 'Profile', icon: <User size={20} /> },
   { id: 'security', label: 'Security', icon: <Shield size={20} /> },
+  { id: 'sessions', label: 'Sessions', icon: <MonitorSmartphone size={20} /> },
 ];
 
 export default function SettingsLayout() {

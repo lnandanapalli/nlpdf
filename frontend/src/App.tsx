@@ -9,6 +9,7 @@ import DocumentHistory from './components/DocumentHistory';
 import SettingsLayout from './components/settings/SettingsLayout';
 import ProfileSettings from './components/settings/ProfileSettings';
 import SecuritySettings from './components/settings/SecuritySettings';
+import SessionSettings from './components/settings/SessionSettings';
 import TermsOfService from './components/TermsOfService';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import CookieConsent from './components/CookieConsent';
@@ -85,6 +86,7 @@ function App() {
                 <Route index element={<Navigate to="profile" replace />} />
                 <Route path="profile" element={<ProfileSettings />} />
                 <Route path="security" element={<SecuritySettings onAccountDeleted={handleLogout} />} />
+                <Route path="sessions" element={<SessionSettings />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

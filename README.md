@@ -78,17 +78,29 @@ API docs available at [localhost:8000/docs](http://localhost:8000/docs) when run
 
 ## API Endpoints
 
-| Method | Path               | Auth   | Purpose                             |
-| ------ | ------------------ | ------ | ----------------------------------- |
-| POST   | `/auth/signup`     | -      | Register, send OTP                  |
-| POST   | `/auth/verify_otp` | -      | Verify OTP, set auth cookies        |
-| POST   | `/auth/resend_otp` | -      | Resend OTP                          |
-| POST   | `/auth/login`      | -      | Authenticate, set auth cookies      |
-| POST   | `/auth/refresh`    | Cookie | Rotate token pair                   |
-| POST   | `/auth/logout`     | Cookie | Revoke refresh token, clear cookies |
-| GET    | `/auth/me`         | Cookie | Current user info                   |
-| POST   | `/pdf/process`     | Cookie | Process PDFs with natural language  |
-| GET    | `/health`          | -      | Health check                        |
+| Method | Path                           | Auth   | Purpose                                                  |
+| ------ | ------------------------------ | ------ | -------------------------------------------------------- |
+| POST   | `/auth/signup`                 | -      | Register, send OTP                                       |
+| POST   | `/auth/verify_otp`             | -      | Verify OTP and set the password, set auth cookies        |
+| POST   | `/auth/resend_otp`             | -      | Resend OTP to an unverified email                        |
+| POST   | `/auth/login`                  | -      | Authenticate, set auth cookies                           |
+| POST   | `/auth/refresh`                | Cookie | Rotate token pair                                        |
+| POST   | `/auth/logout`                 | Cookie | End this device's session, clear cookies                 |
+| GET    | `/auth/me`                     | Cookie | Current user info                                        |
+| PUT    | `/auth/profile`                | Cookie | Update first/last name                                   |
+| POST   | `/auth/change-password`        | Cookie | Change password, revoke all other sessions               |
+| GET    | `/auth/sessions`               | Cookie | List active sessions (devices)                           |
+| DELETE | `/auth/sessions/{session_id}`  | Cookie | Sign out one device                                      |
+| POST   | `/auth/sessions/logout-all`    | Cookie | Sign out every other device immediately                  |
+| POST   | `/auth/delete-account/request` | Cookie | Check password, email a deletion code                    |
+| POST   | `/auth/delete-account/confirm` | Cookie | Delete the account with the emailed code                 |
+| POST   | `/auth/forgot-password`        | -      | Email a password reset code                              |
+| POST   | `/auth/reset-password`         | -      | Reset password with the code, revoke all sessions        |
+| POST   | `/pdf/process`                 | Cookie | Process PDFs/Markdown with natural language              |
+| GET    | `/documents`                   | Cookie | Paginated processing history                             |
+| DELETE | `/documents/{document_id}`     | Cookie | Delete one history entry                                 |
+| DELETE | `/documents`                   | Cookie | Clear all history                                        |
+| GET    | `/health`                      | -      | Health check (includes a database query)                 |
 
 ## Docker
 

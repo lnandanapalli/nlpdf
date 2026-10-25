@@ -188,6 +188,21 @@ class TestGetClientIp:
         # Uses rightmost IP (appended by reverse proxy, not spoofable)
         assert get_client_ip(request) == "5.6.7.8"
 
+    @pytest.mark.parametrize(
+        ("header", "expected"),
+        [
+            ("203.0.113.5:61432", "203.0.113.5"),
+            ("1.2.3.4, 203.0.113.5:443", "203.0.113.5"),
+            ("[2001:db8::1]:443", "2001:db8::1"),
+            ("2001:db8::1", "2001:db8::1"),
+        ],
+    )
+    def test_strips_port_appended_by_proxy(self, header, expected):
+        """Azure App Service can send ip:port; the port must not split rate limits."""
+        request = MagicMock()
+        request.headers = {"X-Forwarded-For": header}
+        assert get_client_ip(request) == expected
+
     def test_from_request_client(self):
         request = MagicMock()
         request.headers = {}

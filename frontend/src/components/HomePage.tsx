@@ -5,7 +5,7 @@ import DragDropZone from './DragDropZone';
 import CommandInput from './CommandInput';
 import ProcessingState from './ProcessingState';
 import ResultCard from './ResultCard';
-import { processPDFs } from '../services/api';
+import { formatErrorDetail, processPDFs } from '../services/api';
 
 type AppState = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
@@ -43,13 +43,15 @@ export default function HomePage() {
         if (data instanceof Blob) {
           try {
             const json = JSON.parse(await data.text());
-            detail = typeof json.detail === 'string' ? json.detail : JSON.stringify(json.detail);
+            detail = formatErrorDetail(json.detail, '') || null;
           } catch {
             // ignore parse errors
           }
-        } else if (typeof data.detail === 'string') {
-          detail = data.detail;
+        } else {
+          detail = formatErrorDetail(data.detail, '') || null;
         }
+      } else if (axios.isAxiosError(error) && !error.response) {
+        detail = "Can't reach the server. Check your connection and try again.";
       }
 
       setErrorMessage(detail ?? 'An unexpected error occurred while communicating with the server.');

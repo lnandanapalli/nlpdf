@@ -64,8 +64,12 @@ async def increment_otp_attempts(db: AsyncSession, user: User) -> int:
     two parallel requests both read the same stale count and both slip through
     the lockout gate.
 
-    Also clears the OTP code in memory once the limit is reached so the
-    caller can raise the appropriate error without a second DB round-trip.
+    Also clears the OTP code once the limit is reached so the caller can
+    raise the appropriate error without a second DB round-trip.
+
+    Commits immediately: the caller always raises an HTTPException next, and
+    get_db rolls the transaction back on any exception, which would otherwise
+    discard the increment and make the attempt limit unenforceable.
     """
     result = await db.execute(
         update(User)
@@ -79,6 +83,7 @@ async def increment_otp_attempts(db: AsyncSession, user: User) -> int:
         user.otp_code = None
         user.otp_expires_at = None
         user.otp_purpose = None
+    await db.commit()
     return new_count
 
 
@@ -99,6 +104,9 @@ async def record_failed_login(db: AsyncSession, user: User) -> None:
     instead of a Python read-modify-write, preventing the TOCTOU race where
     two parallel requests both read the same stale count and both slip through
     the lockout gate.
+
+    Commits immediately for the same reason as increment_otp_attempts: the
+    caller raises a 401 next, and the rollback in get_db would undo the count.
     """
     result = await db.execute(
         update(User)
@@ -110,6 +118,7 @@ async def record_failed_login(db: AsyncSession, user: User) -> None:
     user.failed_login_attempts = new_count  # keep in-memory object consistent
     if new_count >= MAX_FAILED_LOGIN_ATTEMPTS:
         user.locked_until = datetime.now(UTC) + timedelta(minutes=15)
+    await db.commit()
 
 
 async def reset_failed_logins(db: AsyncSession, user: User) -> None:

@@ -36,10 +36,15 @@ class UserResponse(BaseModel):
 
 
 class VerifyOTPRequest(BaseModel):
-    """Request to verify an OTP."""
+    """Request to verify an OTP.
+
+    The password is required again here and becomes the account's password,
+    so only the person who received the code chooses it.
+    """
 
     email: EmailStr = Field(..., max_length=255)
     otp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    password: str = Field(..., min_length=8, max_length=128)
     cf_token: str = Field(..., max_length=4096)
 
 

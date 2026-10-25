@@ -14,7 +14,79 @@ from backend.schemas.llm_schema import (
 )
 from backend.schemas.rotate_schema import RotateParams
 from backend.schemas.split_schema import SplitParams
-from backend.services.operations_executor_service import execute_operation
+from backend.services.operations_executor_service import (
+    execute_operation,
+    execute_operation_chain,
+    validate_operation_chain,
+)
+
+ROTATE = RotateOperation(operation="rotate", parameters=RotateParams(rotations=[(1, 90)]))
+SPLIT = SplitOperation(operation="split", parameters=SplitParams(page_ranges=[(1, 2)], merge=True))
+SPLIT_TO_ZIP = SplitOperation(
+    operation="split", parameters=SplitParams(page_ranges=[(1, 1), (2, 2)], merge=False)
+)
+MERGE = MergeOperation(operation="merge", parameters={})
+COMPRESS = CompressOperation(operation="compress", parameters=CompressParams(level=2))
+
+
+class TestValidateOperationChain:
+    """Page-based operations must never run against several files.
+
+    The operations come from an LLM, so a chain like 'rotate page 3' on three
+    uploads has to be refused in code, not quietly applied to the first file.
+    """
+
+    @pytest.mark.parametrize("operation", [ROTATE, SPLIT, SPLIT_TO_ZIP])
+    def test_page_operation_on_several_files_is_rejected(self, operation):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_operation_chain([operation], input_count=2)
+
+        assert exc_info.value.status_code == 400
+        assert "one PDF at a time" in exc_info.value.detail
+
+    def test_page_operation_after_bulk_compress_is_rejected(self):
+        """Compress keeps one output per file, so rotate would still be ambiguous."""
+        with pytest.raises(HTTPException):
+            validate_operation_chain([COMPRESS, ROTATE], input_count=3)
+
+    @pytest.mark.parametrize(
+        "chain",
+        [
+            [MERGE, ROTATE],
+            [MERGE, SPLIT],
+            [COMPRESS, MERGE, ROTATE, SPLIT_TO_ZIP],
+        ],
+    )
+    def test_page_operation_after_merge_is_allowed(self, chain):
+        validate_operation_chain(chain, input_count=3)
+
+    def test_single_file_chain_is_allowed(self):
+        validate_operation_chain([ROTATE, COMPRESS, SPLIT_TO_ZIP], input_count=1)
+
+    def test_step_after_split_into_files_is_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_operation_chain([SPLIT_TO_ZIP, COMPRESS], input_count=1)
+
+        assert "last step" in exc_info.value.detail
+
+    def test_merge_of_a_single_file_is_rejected(self):
+        with pytest.raises(HTTPException):
+            validate_operation_chain([ROTATE, MERGE], input_count=1)
+
+    def test_chain_runs_nothing_when_invalid(self, sample_pdf, tmp_path):
+        with (
+            patch("backend.services.operations_executor_service.rotate_pdf") as rotate,
+            pytest.raises(HTTPException),
+        ):
+            execute_operation_chain([ROTATE], [sample_pdf, sample_pdf], tmp_path)
+
+        rotate.assert_not_called()
+
+    def test_execute_operation_refuses_to_pick_one_of_several_files(self, sample_pdf, tmp_output):
+        with pytest.raises(HTTPException) as exc_info:
+            execute_operation(ROTATE, [sample_pdf, sample_pdf], tmp_output)
+
+        assert exc_info.value.status_code == 400
 
 
 class TestExecuteCompressOperation:

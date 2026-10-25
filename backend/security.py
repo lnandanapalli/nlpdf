@@ -203,7 +203,7 @@ def cleanup_files(*paths: Path) -> None:
             else:
                 path.unlink(missing_ok=True)
         except OSError:
-            logger.warning("Failed to clean up temp path: %s", path)
+            logger.warning("temp_cleanup_failed", path=str(path))
 
 
 class CleanupFileResponse(FileResponse):
@@ -245,6 +245,19 @@ class CleanupFileResponse(FileResponse):
             cleanup_files(*self.cleanup_paths)
 
 
+def _strip_port(address: str) -> str:
+    """Drop the port some proxies (Azure App Service among them) append to an IP.
+
+    Without this every request from one client has a different "IP" (its
+    source port changes), which defeats the per-IP rate limits.
+    """
+    if address.startswith("["):  # [2001:db8::1]:443
+        return address[1:].split("]", 1)[0]
+    if address.count(":") == 1:  # 203.0.113.5:61432 (a bare IPv6 has several colons)
+        return address.split(":", 1)[0]
+    return address
+
+
 def get_client_ip(request: Request) -> str:
     """Extract the real client IP from the request.
 
@@ -263,12 +276,13 @@ def get_client_ip(request: Request) -> str:
       - CDN with a dedicated verified-IP header → use that header instead
         (more reliable than index math)
 
-    Current setup: 1 trusted proxy, so [-1] is the real client IP.
-    Update this if you add a CDN or reverse proxy in front.
+    Current setup: 1 trusted proxy (the Azure App Service front end, which is
+    the only way traffic reaches the container), so [-1] is the real client
+    IP. Update this if you add a CDN or reverse proxy in front.
     """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[-1].strip()
+        return _strip_port(forwarded.split(",")[-1].strip())
     # Direct connection fallback (e.g. local development with no proxy)
     return request.client.host if request.client else "unknown"
 

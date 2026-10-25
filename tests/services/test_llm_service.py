@@ -127,6 +127,20 @@ class TestProcessMessage:
         assert exc_info.value.status_code == 400
         assert "Please describe a valid PDF operation" in exc_info.value.detail
 
+    async def test_non_object_items_are_retried_not_a_500(self, llm_service):
+        """A list of strings or numbers used to raise TypeError in the error check."""
+        llm_service._call_llm = AsyncMock(
+            side_effect=[
+                "[1, 2]",
+                '[{"operation": "compress", "parameters": {"level": 2}}]',
+            ]
+        )
+
+        result = await llm_service.process_message("compress this")
+
+        assert result[0].operation == "compress"
+        assert llm_service._call_llm.call_count == 2
+
     async def test_all_retries_exhausted_raises_400(self, llm_service):
         llm_service._call_llm = AsyncMock(return_value="invalid json forever")
 

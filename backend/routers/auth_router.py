@@ -24,6 +24,7 @@ from backend.auth.jwt import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    new_jti,
 )
 from backend.auth.password import (
     DUMMY_HASH,
@@ -40,6 +41,7 @@ from backend.crud.session_crud import (
     delete_session_by_id,
     delete_session_by_jti,
     get_active_sessions_for_user,
+    get_session_by_id,
     get_session_by_jti,
     rotate_session_jti,
 )
@@ -95,6 +97,18 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentSessionId = Annotated[int | None, Depends(get_current_session_id)]
 
+# A refresh token presented again this soon after its session rotated is
+# treated as two tabs refreshing at once rather than as a stolen token.
+REFRESH_REUSE_GRACE = timedelta(seconds=30)
+
+# Every failed login gets this exact response, whether the email is unknown,
+# the password is wrong or the account is locked, so the response never
+# reveals which addresses have accounts. The second sentence tells a locked-out
+# owner why a correct password is being refused.
+INVALID_LOGIN_DETAIL = (
+    "Invalid email or password. After several failed attempts, " "sign-in is paused for 15 minutes."
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -138,13 +152,13 @@ async def _create_token_pair_and_session(
     """Issue a new access+refresh token pair, record a session row, and set cookies.
 
     Order matters:
-      1. Create refresh token first (to get the JTI)
+      1. Generate the JTI
       2. Flush session to get session.id
-      3. Create access token embedding both token_version and session_id
+      3. Create both tokens, embedding the session_id (and token_version)
       4. Set cookies
     """
-    # 1. Refresh token (has JTI)
-    refresh, jti = create_refresh_token({"sub": user.email})
+    # 1. Refresh token identity
+    jti = new_jti()
     expires_at = _session_expires_at()
 
     # 2. Session row
@@ -167,7 +181,9 @@ async def _create_token_pair_and_session(
         ),
     )
 
-    # 3. Access token — embeds token_version (C3) and session_id (for sessions list)
+    # 3. Tokens — the access token embeds token_version (C3) and session_id (for
+    # the sessions list); the refresh token embeds session_id for reuse checks.
+    refresh, _ = create_refresh_token({"sub": user.email, "sid": sess.id}, jti=jti)
     access = create_access_token(
         {
             "sub": user.email,
@@ -178,6 +194,22 @@ async def _create_token_pair_and_session(
 
     # 4. Set cookies
     set_auth_cookies(response, access, refresh)
+
+
+async def _is_concurrent_refresh(db: AsyncSession, payload: dict[str, Any], user_id: int) -> bool:
+    """Whether a refresh token with an unknown JTI was just rotated by another request.
+
+    Two tabs that refresh at the same moment both send the same token; the
+    first one rotates it and the second arrives with a JTI that no longer
+    exists. That is not theft, so it must not revoke every session.
+    """
+    sid = payload.get("sid")
+    if not isinstance(sid, int):
+        return False
+    session = await get_session_by_id(db, sid, user_id)
+    if session is None or session.last_used_at is None:
+        return False
+    return datetime.now(UTC) - _normalize_tz(session.last_used_at) < REFRESH_REUSE_GRACE
 
 
 def _check_otp_expiry(otp_expires_at: datetime) -> None:
@@ -209,6 +241,10 @@ async def signup(
             detail="CAPTCHA verification failed",
         )
 
+    # Hash before looking the user up so every branch costs the same Argon2
+    # time; otherwise the fast "already verified" branch reveals which
+    # addresses have accounts.
+    hashed_password = hash_password(body.password)
     existing = await get_user_by_email(db, body.email)
 
     if existing is not None:
@@ -218,14 +254,19 @@ async def signup(
                 message="If that email is valid, a verification code has been sent."
             )
 
-        # SECURE: Do absolutely nothing to the user's profile or password.
-        # Only reuse the slot to regenerate a fresh token and resend the email.
+        # Nobody has proven they own this address yet, so the latest signup
+        # replaces the earlier details. Keeping the first signup's password
+        # let anyone pre-register someone else's email and later log in to
+        # the account its owner verified. verify_otp sets the password again,
+        # so only the holder of the emailed code decides the final one.
         user = existing
+        await update_user_password(db, user, hashed_password)
+        await update_user_name(db, user, body.first_name, body.last_name)
     else:
         user = await create_user(
             db,
             body.email,
-            hash_password(body.password),
+            hashed_password,
             body.first_name,
             body.last_name,
         )
@@ -304,6 +345,9 @@ async def verify_otp(
             detail="Invalid or expired verification code",
         )
 
+    # The code proves ownership of the address, so the password submitted
+    # with it becomes the account's password, whatever any earlier signup set.
+    await update_user_password(db, user, hash_password(body.password))
     await mark_user_verified(db, user)
     await _create_token_pair_and_session(db, user, request, response)
     return SuccessResponse(message="Email verified successfully")
@@ -356,30 +400,25 @@ async def login(
         )
 
     user = await get_user_by_email(db, body.email)
+    invalid_login = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=INVALID_LOGIN_DETAIL,
+    )
 
     if user is None:
         verify_password(body.password, DUMMY_HASH)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        raise invalid_login
 
-    # Check account lockout
-    if user.locked_until is not None:
-        locked_until = _normalize_tz(user.locked_until)
-        if locked_until > datetime.now(UTC):
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Account temporarily locked due to too many failed "
-                "login attempts. Please try again later.",
-            )
+    # A locked account answers exactly like a wrong password, including the
+    # Argon2 time: a distinct status would confirm the address has an account,
+    # and checking the real password would let guessing continue while locked.
+    if user.locked_until is not None and _normalize_tz(user.locked_until) > datetime.now(UTC):
+        verify_password(body.password, DUMMY_HASH)
+        raise invalid_login
 
     if not verify_password(body.password, user.hashed_password):
         await record_failed_login(db, user)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        raise invalid_login
 
     if not user.is_verified:
         raise HTTPException(
@@ -423,15 +462,19 @@ async def refresh(
 
     session = await get_session_by_jti(db, jti)
     if session is None or session.user_id != user.id:
-        # JTI mismatch — possible token theft → nuke all sessions for this user
-        await delete_all_user_sessions(db, user.id)
+        if not await _is_concurrent_refresh(db, payload, user.id):
+            # JTI mismatch — possible token theft → nuke all sessions for this user.
+            # Commit now: get_db rolls back when the 401 below is raised.
+            await delete_all_user_sessions(db, user.id)
+            await db.commit()
+            logger.warning("refresh_token_reuse_detected", user_id=user.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
     # Rotate: new JTI, same session row (preserves device info / created_at)
-    new_refresh, new_jti = create_refresh_token({"sub": email})
+    new_refresh, new_jti = create_refresh_token({"sub": email, "sid": session.id})
     new_expires = _session_expires_at()
     await rotate_session_jti(db, session, new_jti, new_expires)
 
@@ -451,10 +494,15 @@ async def logout(
     request: Request,
     response: Response,
     current_user: CurrentUser,
+    current_session_id: CurrentSessionId,
     db: DB,
 ) -> SuccessResponse:
     """Log out this device only — deletes the current session, clears cookies."""
-    # Identify and delete only this session (other devices unaffected)
+    # Identify and delete only this session (other devices unaffected). The
+    # refresh cookie is scoped to /auth/refresh and never reaches this route,
+    # so the session comes from the access token's sid claim.
+    if current_session_id is not None:
+        await delete_session_by_id(db, current_session_id, current_user.id)
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
         try:
@@ -768,6 +816,7 @@ async def reset_password(
 
     # SECURE: Revoke all existing sessions and bump token version on password reset
     await update_user_password(db, user, hash_password(body.new_password))
+    await reset_failed_logins(db, user)
     await delete_all_user_sessions(db, user.id)
     await bump_token_version(db, user)
 

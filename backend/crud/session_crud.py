@@ -53,6 +53,14 @@ async def get_session_by_jti(db: AsyncSession, jti: str) -> Session | None:
     return result.scalars().first()
 
 
+async def get_session_by_id(db: AsyncSession, session_id: int, user_id: int) -> Session | None:
+    """Fetch a session by PK, scoped to the owning user."""
+    result = await db.execute(
+        select(Session).where(Session.id == session_id, Session.user_id == user_id)
+    )
+    return result.scalars().first()
+
+
 async def get_active_sessions_for_user(db: AsyncSession, user_id: int) -> list[Session]:
     """Return all non-expired sessions for a user, newest-first."""
     result = await db.execute(

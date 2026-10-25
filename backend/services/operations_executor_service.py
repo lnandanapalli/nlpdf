@@ -28,6 +28,15 @@ MIN_FILES_FOR_MERGE = 2
 MAX_OPERATIONS_PER_CHAIN = 10
 MAX_SPLIT_RANGES = 50
 
+# Page numbers only mean something for one document: with several uploads,
+# "rotate page 3" or "pages 1-5" could refer to any of them, and the files
+# can have different page counts.
+SINGLE_DOCUMENT_OPERATIONS = (RotateOperation, SplitOperation)
+SINGLE_DOCUMENT_DETAIL = (
+    "Rotate and split work on one PDF at a time. Upload a single file, "
+    "or merge the files first (for example: 'merge, then rotate page 2')."
+)
+
 
 def execute_operation(
     operation: OperationType,
@@ -74,7 +83,13 @@ def execute_operation(
                     _invalid()
             return merge_pdfs(input_paths, output_path)
 
-        # For non-merge operations, execute on the first provided file
+        # Every other operation works on exactly one file; bulk mode calls this
+        # once per file. Never silently pick one input out of several.
+        if len(input_paths) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=SINGLE_DOCUMENT_DETAIL,
+            )
         main_input = input_paths[0]
         ext = main_input.suffix.lower()
 
@@ -110,20 +125,59 @@ def execute_operation(
     except HTTPException:
         raise
     except ValueError as e:
-        logger.warning("Validation error in %s: %s", operation.operation, e)
+        logger.warning("operation_invalid", operation=operation.operation, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The operation could not be completed. Please check "
             "that your page numbers and ranges are valid for the uploaded document.",
         ) from e
     except Exception:
-        logger.exception("Operation %s failed", operation.operation)
+        logger.exception("operation_failed", operation=operation.operation)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong while processing your file. Please try again.",
         ) from None
 
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown operation")
+
+
+def validate_operation_chain(operations: list[OperationType], input_count: int) -> None:
+    """Reject chains that cannot run on the uploaded files, before any work starts.
+
+    The operations come from an LLM, so they are checked here rather than
+    trusted: the prompt's chain rules are a hint the model may ignore. The
+    walk tracks how many files each step produces (merge -> 1, bulk ops keep
+    the count) and refuses page-based operations whenever more than one
+    file is in play, and any step after a split into separate files.
+
+    Raises:
+        HTTPException: 400 describing the first rule the chain breaks.
+    """
+    file_count = input_count
+    last = len(operations) - 1
+    for i, operation in enumerate(operations):
+        if isinstance(operation, MergeOperation):
+            if file_count < MIN_FILES_FOR_MERGE:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Merge needs at least two files. Upload the files you want to combine.",
+                )
+            file_count = 1
+        elif isinstance(operation, SINGLE_DOCUMENT_OPERATIONS):
+            if file_count != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=SINGLE_DOCUMENT_DETAIL,
+                )
+            if (
+                isinstance(operation, SplitOperation)
+                and not operation.parameters.merge
+                and i < last
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Splitting into separate files has to be the last step.",
+                )
 
 
 def _is_bulk(operation: OperationType, input_count: int) -> bool:
@@ -179,6 +233,8 @@ def execute_operation_chain(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Instruction too complex. Maximum {MAX_OPERATIONS_PER_CHAIN} steps allowed.",
         )
+
+    validate_operation_chain(operations, len(input_paths))
 
     if original_filenames is None:
         original_filenames = [original_filename]

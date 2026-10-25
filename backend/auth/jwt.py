@@ -18,14 +18,22 @@ def create_access_token(data: dict[str, Any]) -> str:
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(data: dict[str, Any]) -> tuple[str, str]:
+def new_jti() -> str:
+    """Generate a unique refresh token identifier."""
+    return secrets.token_urlsafe(16)
+
+
+def create_refresh_token(data: dict[str, Any], jti: str | None = None) -> tuple[str, str]:
     """Create a JWT refresh token with a longer expiry.
+
+    Pass ``jti`` when the identifier has to be known before the token is
+    built (e.g. to create the session row first); otherwise a new one is made.
 
     Returns:
         A tuple of (encoded_token, jti) where jti is the unique token
         identifier that must be stored for one-time-use validation.
     """
-    jti = secrets.token_urlsafe(16)
+    jti = jti or new_jti()
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode["exp"] = expire
