@@ -113,9 +113,31 @@ Packages the backend only. Frontend is deployed separately as static files.
 
 ## Testing
 
+| Suite | Where | What it covers |
+| ----- | ----- | -------------- |
+| Backend unit | `tests/` | Services, validators, schemas, auth helpers, logging, startup cleanup |
+| Backend integration | `tests/integration/` | The full app (all middleware and routers) on SQLite: PDF pipeline, CSRF/CORS, auth security properties |
+| Property-based | `tests/test_properties.py` | Fuzzes LLM replies, page ranges and forwarded IPs with Hypothesis |
+| Migrations | `tests/test_migrations.py` | Upgrade, downgrade and model/migration drift on a scratch SQL Server database (skipped if none is reachable) |
+| Frontend unit | `frontend/src/**/*.test.ts(x)` | API client (token refresh, CSRF, error messages) and key screens, with Vitest |
+| End-to-end | `frontend/e2e/` | Real browser against the real backend and database; only the LLM, email and Turnstile are faked |
+
 ```bash
-poetry run pytest tests/ -v
+# Backend (unit + integration + property + migrations)
+poetry run pytest
+
+# Frontend unit tests
+cd frontend && npm test
+
+# End-to-end (needs SQL Server up and migrated; starts its own servers on ports 8001/5174)
+docker compose up -d sqlserver && poetry run alembic upgrade head
+cd frontend && npx playwright install chromium && npm run test:e2e
 ```
+
+The e2e backend is `tests/e2e_support/app.py`: the real application with a
+scripted LLM, an in-memory email outbox and the server-side CAPTCHA check
+stubbed. It refuses to start with `APP_ENV=production`, sends no real email,
+and only creates (and cleans up) `e2e-*@example.com` accounts.
 
 ## Code Quality
 

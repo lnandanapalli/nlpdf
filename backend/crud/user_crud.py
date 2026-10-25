@@ -87,6 +87,15 @@ async def increment_otp_attempts(db: AsyncSession, user: User) -> int:
     return new_count
 
 
+async def clear_user_otp(db: AsyncSession, user: User) -> None:
+    """Spend the current code so it can't be used a second time."""
+    user.otp_code = None
+    user.otp_expires_at = None
+    user.otp_purpose = None
+    user.otp_attempts = 0
+    await db.flush()
+
+
 async def mark_user_verified(db: AsyncSession, user: User) -> None:
     """Mark a user as verified and clear the OTP fields."""
     user.is_verified = True

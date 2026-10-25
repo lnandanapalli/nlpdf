@@ -116,16 +116,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 app = FastAPI(title="NLPDF API", version="0.2.0", lifespan=lifespan)
 app.state.limiter = limiter
 
-app.add_middleware(
-    CORSMiddleware,  # type: ignore[arg-type]
-    allow_origins=settings.CORS_ALLOW_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type", "X-CSRF-Token"],
-    expose_headers=["Content-Disposition"],
-    max_age=600,
-)
-
 
 # Keys in a pydantic error dict that echo back what the client sent. `input` is
 # the offending value -- for a missing field, the entire request body -- and
@@ -220,6 +210,20 @@ async def security_headers_middleware(
         )
     return response
 
+
+# Added last so it is the OUTERMOST middleware: every response, including the
+# 403s from the CSRF check and the 504s from the timeout, must carry CORS
+# headers, or the browser hides the real error and the app can only say it
+# couldn't reach the server.
+app.add_middleware(
+    CORSMiddleware,  # type: ignore[arg-type]
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
+    expose_headers=["Content-Disposition"],
+    max_age=600,
+)
 
 app.include_router(llm_router)
 app.include_router(auth_router)
