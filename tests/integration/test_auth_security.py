@@ -1,6 +1,8 @@
 """Security properties of the auth flows, exercised through the full app."""
 
+import base64
 from datetime import UTC, datetime, timedelta
+import json
 from unittest.mock import patch
 
 import jwt
@@ -143,9 +145,12 @@ class TestTokens:
         assert (await user.get("/auth/me")).status_code == 401
 
     async def test_unsigned_token_is_rejected(self, user):
-        forged = jwt.encode(
-            {"sub": "owner@example.com", "type": "access", "ver": 0}, key=None, algorithm="none"
-        )
+        # The classic "alg: none" forgery: a header and payload with no signature.
+        def b64(obj: dict) -> str:
+            raw = json.dumps(obj, separators=(",", ":")).encode()
+            return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+        forged = f'{b64({"alg": "none", "typ": "JWT"})}.{b64({"sub": "owner@example.com", "type": "access", "ver": 0})}.'
         replace_cookie(user, "access_token", forged)
         assert (await user.get("/auth/me")).status_code == 401
 
