@@ -29,7 +29,7 @@ jobs:
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
       - name: Install Poetry
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -sSL https://install.python-poetry.org | python3 - --version 2.5.1
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Cache Poetry virtualenv
         uses: actions/cache@v6
@@ -89,6 +89,48 @@ jobs:
       - name: Build
         run: npm run build
 
+  docker:
+    name: Docker image (build & smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the backend image
+        run: docker build -t nlpdf-backend:ci .
+      - name: Every native library resolves
+        # A shared library missing at runtime only shows up as a failure on
+        # first use (e.g. the ODBC driver needs libgssapi_krb5), so check all.
+        run: |
+          docker run --rm --entrypoint sh nlpdf-backend:ci -c '
+            missing=$(find /opt/venv /opt/microsoft -name "*.so*" -type f -exec ldd {} \; 2>/dev/null | grep "not found" || true)
+            if [ -n "$missing" ]; then echo "$missing"; exit 1; fi'
+      - name: Runs as non-root, ships no compiler, ODBC driver is registered
+        run: |
+          docker run --rm --entrypoint sh nlpdf-backend:ci -c '
+            set -e
+            test "$(whoami)" = appuser
+            if command -v gcc; then echo "gcc shipped in the final image"; exit 1; fi
+            python -c "import pyodbc; assert \"ODBC Driver 18 for SQL Server\" in pyodbc.drivers()"'
+      - name: Starts in production mode and serves requests
+        # Dummy values: the app needs them to start; nothing is called.
+        env:
+          APP_ENV: production
+          HUGGINGFACE_API_TOKEN: dummy # pragma: allowlist secret
+          DB_PASSWORD: dummy # pragma: allowlist secret
+          JWT_SECRET_KEY: ci-smoke-secret-key-at-least-32-characters # pragma: allowlist secret
+          RESEND_API_KEY: dummy # pragma: allowlist secret
+          CLOUDFLARE_TURNSTILE_SECRET_KEY: dummy # pragma: allowlist secret
+        run: |
+          docker run -d --name smoke -p 8000:8000 \
+            -e APP_ENV -e HUGGINGFACE_API_TOKEN -e DB_PASSWORD -e JWT_SECRET_KEY \
+            -e RESEND_API_KEY -e CLOUDFLARE_TURNSTILE_SECRET_KEY \
+            nlpdf-backend:ci
+          for i in $(seq 1 30); do curl -sf localhost:8000/ && break; sleep 1; done
+          curl -sf localhost:8000/ | grep -q "NLPDF API is running"
+          if docker logs smoke 2>&1 | grep -q "Could not configure file logging"; then
+            docker logs smoke
+            exit 1
+          fi
+
   e2e:
     name: Full Stack E2E (Playwright)
     runs-on: ubuntu-latest
@@ -111,7 +153,7 @@ jobs:
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
       - name: Install Poetry
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -sSL https://install.python-poetry.org | python3 - --version 2.5.1
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install Backend Dependencies
         run: |

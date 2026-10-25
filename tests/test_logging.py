@@ -11,9 +11,26 @@ import structlog
 from backend import logging as app_logging
 
 
-def test_production_and_development_log_dirs():
-    assert app_logging.get_log_dir("production") == Path(app_logging.PROD_LOG_DIR)
+def test_production_logs_to_stdout_only_by_default():
+    assert app_logging.get_log_dir("production") is None
+
+
+def test_development_writes_to_local_logs():
     assert app_logging.get_log_dir("development") == Path(app_logging.DEV_LOG_DIR)
+
+
+def test_configured_dir_wins_in_every_environment():
+    assert app_logging.get_log_dir("production", "/var/log/nlpdf") == Path("/var/log/nlpdf")
+    assert app_logging.get_log_dir("development", "/var/log/nlpdf") == Path("/var/log/nlpdf")
+
+
+def test_stdout_only_adds_no_file_handler():
+    root = logging.getLogger()
+    before = list(root.handlers)
+    with patch.object(app_logging, "get_log_dir", return_value=None):
+        app_logging.setup_logging()
+    added = [h for h in root.handlers if h not in before]
+    assert not any(isinstance(h, logging.FileHandler) for h in added)
 
 
 class TestCleanupOldLogFiles:
@@ -39,6 +56,9 @@ class TestCleanupOldLogFiles:
 
     def test_missing_dir_is_fine(self, tmp_path):
         assert app_logging.cleanup_old_log_files(tmp_path / "nope") == 0
+
+    def test_stdout_only_has_nothing_to_clean(self):
+        assert app_logging.cleanup_old_log_files(None) == 0
 
 
 def test_unwritable_log_dir_falls_back_to_console(tmp_path, capsys):
