@@ -5,7 +5,7 @@ import contextlib
 import shutil
 import sys
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -96,7 +96,7 @@ async def _periodic_cleanup(interval_seconds: int = 3600) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application startup/shutdown lifecycle."""
     _cleanup_old_uploads()
     try:
