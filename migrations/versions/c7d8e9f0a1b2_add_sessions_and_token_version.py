@@ -78,7 +78,7 @@ def downgrade() -> None:
     )
 
     # Remove token_version
-    op.drop_column("users", "token_version")
+    op.drop_column("users", "token_version", mssql_drop_default=True)
 
     # Drop sessions table and its indexes
     op.drop_index("ix_sessions_expires_at", table_name="sessions")

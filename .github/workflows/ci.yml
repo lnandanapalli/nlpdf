@@ -74,16 +74,18 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
-      - name: Set up Node.js 20
+      - name: Set up Node.js 24
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Unit tests
+        run: npm run test:coverage
       - name: Build
         run: npm run build
 
@@ -121,7 +123,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -131,7 +133,7 @@ jobs:
       - name: Install Playwright Browsers
         run: cd frontend && npx playwright install chromium --with-deps
 
-      - name: Start Backend Server
+      - name: Configure and migrate the backend
         run: | # pragma: allowlist secret
           echo "APP_ENV=development" > .env
           echo "JWT_SECRET_KEY=ci-test-secret-key-at-least-32-chars-long" >> .env # pragma: allowlist secret
@@ -144,28 +146,24 @@ jobs:
           echo "HUGGINGFACE_API_TOKEN=mock" >> .env
           echo "RESEND_API_KEY=mock" >> .env
           echo "CLOUDFLARE_TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA" >> .env # pragma: allowlist secret
-          
-          # Wait for SQL Server to be healthy
+
           echo "Waiting for SQL Server..."
           until docker exec nlpdf_sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'NlpdfPass123!' -Q 'SELECT 1' -No; do
             sleep 5
           done
-          
           poetry run alembic upgrade head
-          nohup poetry run uvicorn backend.main:app --port 8000 &
-          npx wait-on http-get://localhost:8000/health --timeout 60000
 
+      # Playwright starts the e2e backend (tests/e2e_support/app.py: real app,
+      # fake LLM, captured email) and the Vite dev server itself.
       - name: Run Playwright Tests
         run: cd frontend && npm run test:e2e
-        env:
-          VITE_API_BASE_URL: http://localhost:8000
-          VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
-          CI: true
 
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
-          path: frontend/playwright-report/
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
           retention-days: 7

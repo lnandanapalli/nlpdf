@@ -48,6 +48,7 @@ from backend.crud.session_crud import (
 from backend.crud.user_crud import (
     MAX_OTP_ATTEMPTS,
     bump_token_version,
+    clear_user_otp,
     create_user,
     delete_user,
     get_user_by_email,
@@ -816,6 +817,7 @@ async def reset_password(
 
     # SECURE: Revoke all existing sessions and bump token version on password reset
     await update_user_password(db, user, hash_password(body.new_password))
+    await clear_user_otp(db, user)  # single use: the same code can't reset it again
     await reset_failed_logins(db, user)
     await delete_all_user_sessions(db, user.id)
     await bump_token_version(db, user)

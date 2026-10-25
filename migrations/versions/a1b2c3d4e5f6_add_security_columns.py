@@ -44,5 +44,5 @@ def downgrade() -> None:
     """Remove security columns."""
     op.drop_column("users", "refresh_token_jti")
     op.drop_column("users", "locked_until")
-    op.drop_column("users", "failed_login_attempts")
-    op.drop_column("users", "otp_attempts")
+    op.drop_column("users", "failed_login_attempts", mssql_drop_default=True)
+    op.drop_column("users", "otp_attempts", mssql_drop_default=True)
