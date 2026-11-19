@@ -56,8 +56,9 @@ def _compress_page_images(page: pikepdf.Page, scale: float) -> None:
 
     for name, raw_image in images.items():
         try:
-            pdf_image = PdfImage(raw_image)
-            raw_stream = cast("Stream", pdf_image.obj)
+            # Image XObjects are always streams; get_images() is typed loosely.
+            raw_stream = cast("Stream", raw_image)
+            pdf_image = PdfImage(raw_stream)
 
             if pdf_image.width < MIN_IMAGE_DIMENSION or pdf_image.height < MIN_IMAGE_DIMENSION:
                 continue

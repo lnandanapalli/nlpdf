@@ -159,7 +159,7 @@ skips = ["B110"]  # try/except/pass — intentional in logout (documented)
 
 [tool.ty.rules]
 # user_agents has no py.typed marker; the runtime import is fine.
-unresolved-import = "ignore"
+import-not-found = "ignore"
 
 # This runs on Windows and Linux. A suppression inside a platform-guarded
 # branch is necessarily unused on the other platform.
