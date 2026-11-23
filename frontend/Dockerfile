@@ -7,6 +7,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+ARG VITE_API_BASE_URL
+ARG VITE_TURNSTILE_SITE_KEY
 RUN npm run build
 
 # Serve stage
